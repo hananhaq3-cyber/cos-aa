@@ -1,0 +1,72 @@
+{{- range $name, $agent := .Values.agents }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $.Release.Name }}-agent-{{ $name }}
+  labels:
+    app: cos-aa-agent
+    agent-type: {{ $name }}
+    chart: {{ $.Chart.Name }}-{{ $.Chart.Version }}
+spec:
+  replicas: {{ $agent.replicaCount }}
+  selector:
+    matchLabels:
+      app: cos-aa-agent
+      agent-type: {{ $name }}
+  template:
+    metadata:
+      labels:
+        app: cos-aa-agent
+        agent-type: {{ $name }}
+    spec:
+      imagePullSecrets:
+        - name: ghcr-pull-secret
+      {{- with $.Values.securityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if $.Values.runtimeClassName }}
+      runtimeClassName: {{ $.Values.runtimeClassName }}
+      {{- end }}
+      containers:
+        - name: agent-{{ $name }}
+          image: "{{ $.Values.image.repository }}:{{ $.Values.image.tag }}"
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
+          command: ["celery"]
+          args: ["-A", "src.messaging.broker:celery_app", "worker", "-Q", "{{ $agent.queue }}", "--concurrency=2", "--loglevel=info"]
+          env:
+            - name: AGENT_QUEUE
+              value: "{{ $agent.queue }}"
+            {{- with $.Values.env }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- with $.Values.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+{{- end }}
+---
+{{- if .Values.autoscaling.enabled }}
+{{- range $name, $agent := .Values.agents }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ $.Release.Name }}-agent-{{ $name }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ $.Release.Name }}-agent-{{ $name }}
+  minReplicas: {{ $.Values.autoscaling.minReplicas }}
+  maxReplicas: {{ $.Values.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ $.Values.autoscaling.targetCPUUtilizationPercentage }}
+{{- end }}
+{{- end }}

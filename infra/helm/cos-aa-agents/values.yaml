@@ -1,0 +1,66 @@
+# Each agent type deploys from the agent-base image with different AGENT_QUEUE
+agents:
+  planning:
+    replicaCount: 2
+    queue: planning
+  learning:
+    replicaCount: 1
+    queue: learning
+  monitoring:
+    replicaCount: 1
+    queue: monitoring
+  knowledge:
+    replicaCount: 2
+    queue: knowledge
+
+image:
+  repository: ghcr.io/<GITHUB_ORG>/cos-aa-agent-base
+  tag: "latest"
+  pullPolicy: Always
+
+resources:
+  limits:
+    cpu: "500m"
+    memory: "512Mi"
+  requests:
+    cpu: "250m"
+    memory: "256Mi"
+
+autoscaling:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 70
+
+env:
+  - name: APP_ENV
+    value: "production"
+  - name: POSTGRES_URL
+    valueFrom:
+      secretKeyRef:
+        name: cos-aa-secrets
+        key: postgres-url
+  - name: REDIS_URL
+    valueFrom:
+      secretKeyRef:
+        name: cos-aa-secrets
+        key: redis-url
+  - name: CELERY_BROKER_URL
+    valueFrom:
+      secretKeyRef:
+        name: cos-aa-secrets
+        key: celery-broker-url
+  - name: OPENAI_API_KEY
+    valueFrom:
+      secretKeyRef:
+        name: cos-aa-secrets
+        key: openai-api-key
+  - name: OTLP_ENDPOINT
+    value: "http://jaeger-collector:4317"
+
+# gVisor sandbox for code interpreter tool
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  readOnlyRootFilesystem: true
+runtimeClassName: gvisor

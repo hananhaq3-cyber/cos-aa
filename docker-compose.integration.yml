@@ -1,0 +1,221 @@
+version: "3.9"
+
+services:
+  # ── Infrastructure (from dev compose) ──
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: cos_user
+      POSTGRES_PASSWORD: cos_pass
+      POSTGRES_DB: cos_aa
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cos_user -d cos_aa"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  chroma:
+    image: chromadb/chroma:latest
+    ports:
+      - "8000:8000"
+    volumes:
+      - chroma_data:/chroma/chroma
+    environment:
+      IS_PERSISTENT: "TRUE"
+      ANONYMIZED_TELEMETRY: "FALSE"
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.55
+    ports:
+      - "4317:4317"
+      - "16686:16686"
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./infra/prometheus:/etc/prometheus
+
+  grafana:
+    image: grafana/grafana:10.4.0
+    ports:
+      - "3001:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - ./infra/grafana/dashboards:/var/lib/grafana/dashboards
+
+  # ── Application Services ──
+  api:
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.api
+    ports:
+      - "8080:8000"
+    environment:
+      APP_ENV: development
+      POSTGRES_URL: postgresql+asyncpg://cos_user:cos_pass@postgres:5432/cos_aa
+      REDIS_URL: redis://redis:6379/0
+      CHROMA_HOST: chroma
+      CHROMA_PORT: "8000"
+      OTLP_ENDPOINT: http://jaeger:4317
+      LOG_LEVEL: DEBUG
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      chroma:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  hub:
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.hub
+    command: celery -A src.messaging.broker:celery_app worker -Q hub,default --concurrency=4 --loglevel=info
+    environment:
+      APP_ENV: development
+      POSTGRES_URL: postgresql+asyncpg://cos_user:cos_pass@postgres:5432/cos_aa
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CHROMA_HOST: chroma
+      CHROMA_PORT: "8000"
+      OTLP_ENDPOINT: http://jaeger:4317
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  agent-planning:
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.agent-base
+    command: celery -A src.messaging.broker:celery_app worker -Q planning --concurrency=2 --loglevel=info
+    environment:
+      APP_ENV: development
+      AGENT_QUEUE: planning
+      POSTGRES_URL: postgresql+asyncpg://cos_user:cos_pass@postgres:5432/cos_aa
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CHROMA_HOST: chroma
+      CHROMA_PORT: "8000"
+      OTLP_ENDPOINT: http://jaeger:4317
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  agent-learning:
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.agent-base
+    command: celery -A src.messaging.broker:celery_app worker -Q learning --concurrency=2 --loglevel=info
+    environment:
+      APP_ENV: development
+      AGENT_QUEUE: learning
+      POSTGRES_URL: postgresql+asyncpg://cos_user:cos_pass@postgres:5432/cos_aa
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CHROMA_HOST: chroma
+      CHROMA_PORT: "8000"
+      OTLP_ENDPOINT: http://jaeger:4317
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  agent-monitoring:
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.agent-base
+    command: celery -A src.messaging.broker:celery_app worker -Q monitoring --concurrency=2 --loglevel=info
+    environment:
+      APP_ENV: development
+      AGENT_QUEUE: monitoring
+      POSTGRES_URL: postgresql+asyncpg://cos_user:cos_pass@postgres:5432/cos_aa
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CHROMA_HOST: chroma
+      CHROMA_PORT: "8000"
+      OTLP_ENDPOINT: http://jaeger:4317
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  agent-knowledge:
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.agent-base
+    command: celery -A src.messaging.broker:celery_app worker -Q knowledge --concurrency=2 --loglevel=info
+    environment:
+      APP_ENV: development
+      AGENT_QUEUE: knowledge
+      POSTGRES_URL: postgresql+asyncpg://cos_user:cos_pass@postgres:5432/cos_aa
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CHROMA_HOST: chroma
+      CHROMA_PORT: "8000"
+      OTLP_ENDPOINT: http://jaeger:4317
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  beat:
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.worker
+    command: celery -A src.messaging.broker:celery_app beat --loglevel=info
+    environment:
+      APP_ENV: development
+      POSTGRES_URL: postgresql+asyncpg://cos_user:cos_pass@postgres:5432/cos_aa
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  pg_data:
+  redis_data:
+  chroma_data:

@@ -1,0 +1,105 @@
+syntax = "proto3";
+
+package agent;
+
+option java_multiple_files = true;
+option go_package = "github.com/<GITHUB_ORG>/cos-aa/protos/agent";
+
+// ═══════════════════════════════════════════════════════════════
+// Agent Service — gRPC interface for agent status and capability queries
+// ═══════════════════════════════════════════════════════════════
+
+service AgentService {
+  // Status queries
+  rpc GetStatus(StatusRequest) returns (AgentStatus);
+  rpc GetCapabilities(CapabilityRequest) returns (CapabilityResponse);
+  rpc ListInstances(ListInstancesRequest) returns (ListInstancesResponse);
+
+  // Health
+  rpc HealthCheck(HealthRequest) returns (HealthResponse);
+
+  // Task management
+  rpc GetTaskStatus(TaskStatusRequest) returns (TaskStatusResponse);
+}
+
+// ─── Common ───
+
+message HealthRequest {}
+
+message HealthResponse {
+  bool healthy = 1;
+  map<string, bool> checks = 2;
+  string message = 3;
+}
+
+// ─── Status ───
+
+message StatusRequest {
+  string agent_id = 1;
+  string agent_type = 2;
+}
+
+message AgentStatus {
+  string agent_id = 1;
+  string agent_type = 2;
+  int32 current_task_count = 3;
+  int32 max_concurrent_tasks = 4;
+  string status = 5;              // READY | BUSY | DEGRADED | FAILED
+  string last_heartbeat = 6;
+  double uptime_seconds = 7;
+}
+
+// ─── Capabilities ───
+
+message CapabilityRequest {
+  string agent_type = 1;
+}
+
+message CapabilityDescriptor {
+  string task_type = 1;
+  repeated string required_tool_names = 2;
+  float average_completion_time_seconds = 3;
+}
+
+message CapabilityResponse {
+  string agent_type = 1;
+  repeated CapabilityDescriptor capabilities = 2;
+}
+
+// ─── Instance Management ───
+
+message ListInstancesRequest {
+  string tenant_id = 1;
+  string agent_type = 2;
+  string status_filter = 3;       // empty = all
+}
+
+message AgentInstanceInfo {
+  string instance_id = 1;
+  string agent_type = 2;
+  string status = 3;
+  int32 current_tasks = 4;
+  int32 max_tasks = 5;
+  string started_at = 6;
+}
+
+message ListInstancesResponse {
+  repeated AgentInstanceInfo instances = 1;
+  int32 total = 2;
+}
+
+// ─── Task Status ───
+
+message TaskStatusRequest {
+  string task_id = 1;
+}
+
+message TaskStatusResponse {
+  string task_id = 1;
+  string status = 2;              // PENDING | RUNNING | COMPLETED | FAILED
+  string agent_type = 3;
+  string agent_id = 4;
+  float progress_percent = 5;
+  string started_at = 6;
+  string completed_at = 7;
+}

@@ -1,0 +1,136 @@
+version: "3.9"
+
+# ─── COS-AA Free-Tier Stack ───
+# Runs the full platform on a single server (Oracle Cloud free VM).
+# Usage: docker compose -f docker-compose.free-tier.yml up -d
+#
+# Requires .env file — copy from .env.example and fill in real values.
+
+services:
+  # ── Infrastructure ──
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-cos_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cos_pass}
+      POSTGRES_DB: ${POSTGRES_DB:-cos_aa}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cos_user -d cos_aa"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  chroma:
+    image: chromadb/chroma:latest
+    ports:
+      - "8000:8000"
+    volumes:
+      - chroma_data:/chroma/chroma
+    environment:
+      IS_PERSISTENT: "TRUE"
+      ANONYMIZED_TELEMETRY: "FALSE"
+    restart: unless-stopped
+
+  # ── Application ──
+  api:
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.api
+    ports:
+      - "8080:8000"
+    env_file: .env
+    environment:
+      POSTGRES_URL: postgresql+asyncpg://${POSTGRES_USER:-cos_user}:${POSTGRES_PASSWORD:-cos_pass}@postgres:5432/${POSTGRES_DB:-cos_aa}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      CHROMA_HOST: chroma
+      CHROMA_PORT: "8000"
+      VECTOR_BACKEND: chroma
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      chroma:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.hub
+    command: >
+      celery -A src.messaging.broker:celery_app worker
+      -Q hub,default,planning,learning,monitoring,knowledge,creation,memory
+      --concurrency=2 --loglevel=info
+    env_file: .env
+    environment:
+      POSTGRES_URL: postgresql+asyncpg://${POSTGRES_USER:-cos_user}:${POSTGRES_PASSWORD:-cos_pass}@postgres:5432/${POSTGRES_DB:-cos_aa}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      CHROMA_HOST: chroma
+      CHROMA_PORT: "8000"
+      VECTOR_BACKEND: chroma
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  beat:
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.worker
+    command: celery -A src.messaging.broker:celery_app beat --loglevel=info
+    env_file: .env
+    environment:
+      POSTGRES_URL: postgresql+asyncpg://${POSTGRES_USER:-cos_user}:${POSTGRES_PASSWORD:-cos_pass}@postgres:5432/${POSTGRES_DB:-cos_aa}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pg_data:
+  redis_data:
+  chroma_data:

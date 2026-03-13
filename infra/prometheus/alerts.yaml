@@ -1,0 +1,92 @@
+groups:
+  - name: cos-aa-ooda
+    rules:
+      - alert: OODACycleHighLatency
+        expr: histogram_quantile(0.95, rate(cos_aa_ooda_cycle_duration_seconds_bucket[5m])) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "OODA cycle p95 latency above 10s"
+          description: "Tenant {{ $labels.tenant_id }} OODA p95 = {{ $value }}s"
+
+      - alert: OODACycleFailureRate
+        expr: rate(cos_aa_ooda_cycles_total{outcome="failed"}[5m]) / rate(cos_aa_ooda_cycles_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "OODA cycle failure rate above 10%"
+          description: "Failure rate is {{ $value | humanizePercentage }}"
+
+      - alert: ActiveCyclesHigh
+        expr: cos_aa_active_ooda_cycles > 50
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "More than 50 active OODA cycles"
+
+  - name: cos-aa-agents
+    rules:
+      - alert: AgentTaskFailureRate
+        expr: rate(cos_aa_agent_tasks_total{outcome="failed"}[5m]) / rate(cos_aa_agent_tasks_total[5m]) > 0.15
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Agent {{ $labels.agent_type }} failure rate above 15%"
+
+      - alert: AgentTaskHighLatency
+        expr: histogram_quantile(0.95, rate(cos_aa_agent_task_duration_seconds_bucket[5m])) > 30
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Agent {{ $labels.agent_type }} p95 latency above 30s"
+
+  - name: cos-aa-llm
+    rules:
+      - alert: LLMRequestFailureRate
+        expr: rate(cos_aa_llm_requests_total{outcome="failed"}[5m]) / rate(cos_aa_llm_requests_total[5m]) > 0.05
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "LLM {{ $labels.provider }} failure rate above 5%"
+
+      - alert: LLMHighLatency
+        expr: histogram_quantile(0.95, rate(cos_aa_llm_request_duration_seconds_bucket[5m])) > 15
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "LLM p95 latency above 15s for {{ $labels.provider }}"
+
+  - name: cos-aa-memory
+    rules:
+      - alert: MemoryRetrievalSlow
+        expr: histogram_quantile(0.99, rate(cos_aa_memory_retrieval_duration_seconds_bucket[5m])) > 0.2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Memory retrieval p99 above 200ms for tier {{ $labels.tier }}"
+
+  - name: cos-aa-api
+    rules:
+      - alert: APIHighErrorRate
+        expr: rate(cos_aa_api_requests_total{status_code=~"5.."}[5m]) / rate(cos_aa_api_requests_total[5m]) > 0.05
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "API 5xx error rate above 5%"
+
+      - alert: APIHighLatency
+        expr: histogram_quantile(0.95, rate(cos_aa_api_request_duration_seconds_bucket[5m])) > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "API p95 latency above 5s for {{ $labels.endpoint }}"

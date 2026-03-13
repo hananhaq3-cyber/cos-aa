@@ -1,0 +1,193 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "title": "System Health Overview",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 24, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum(cos_aa_active_ooda_cycles)",
+          "legendFormat": "Active OODA Cycles"
+        }
+      ]
+    },
+    {
+      "title": "OODA Cycle Duration (p95)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, rate(cos_aa_ooda_cycle_duration_seconds_bucket[5m]))",
+          "legendFormat": "p95 {{ tenant_id }}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      }
+    },
+    {
+      "title": "OODA Cycles by Outcome",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "targets": [
+        {
+          "expr": "sum(rate(cos_aa_ooda_cycles_total[5m])) by (outcome)",
+          "legendFormat": "{{ outcome }}"
+        }
+      ]
+    },
+    {
+      "title": "Agent Tasks by Type",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "targets": [
+        {
+          "expr": "sum(rate(cos_aa_agent_tasks_total[5m])) by (agent_type)",
+          "legendFormat": "{{ agent_type }}"
+        }
+      ]
+    },
+    {
+      "title": "Agent Task Duration (p95)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, rate(cos_aa_agent_task_duration_seconds_bucket[5m]))",
+          "legendFormat": "{{ agent_type }}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      }
+    },
+    {
+      "title": "LLM Requests / sec",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 20 },
+      "targets": [
+        {
+          "expr": "sum(rate(cos_aa_llm_requests_total[5m])) by (provider, outcome)",
+          "legendFormat": "{{ provider }} - {{ outcome }}"
+        }
+      ]
+    },
+    {
+      "title": "LLM Tokens Consumed",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 20 },
+      "targets": [
+        {
+          "expr": "sum(rate(cos_aa_llm_tokens_consumed[5m])) by (provider, token_type)",
+          "legendFormat": "{{ provider }} {{ token_type }}"
+        }
+      ]
+    },
+    {
+      "title": "Memory Retrieval Latency (p99)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 28 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, rate(cos_aa_memory_retrieval_duration_seconds_bucket[5m]))",
+          "legendFormat": "{{ tier }}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      }
+    },
+    {
+      "title": "Memory Operations / sec",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 28 },
+      "targets": [
+        {
+          "expr": "sum(rate(cos_aa_memory_operations_total[5m])) by (tier, operation)",
+          "legendFormat": "{{ tier }} {{ operation }}"
+        }
+      ]
+    },
+    {
+      "title": "API Request Rate",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 36 },
+      "targets": [
+        {
+          "expr": "sum(rate(cos_aa_api_requests_total[5m])) by (method, status_code)",
+          "legendFormat": "{{ method }} {{ status_code }}"
+        }
+      ]
+    },
+    {
+      "title": "API Latency (p95)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 36 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, rate(cos_aa_api_request_duration_seconds_bucket[5m]))",
+          "legendFormat": "{{ endpoint }}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      }
+    },
+    {
+      "title": "Tool Executions / sec",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 44 },
+      "targets": [
+        {
+          "expr": "sum(rate(cos_aa_tool_executions_total[5m])) by (tool_name, outcome)",
+          "legendFormat": "{{ tool_name }} {{ outcome }}"
+        }
+      ]
+    },
+    {
+      "title": "Agent Spawn Events",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 44 },
+      "targets": [
+        {
+          "expr": "sum(rate(cos_aa_agent_spawn_total[1h])) by (tenant_id, outcome)",
+          "legendFormat": "{{ tenant_id }} {{ outcome }}"
+        }
+      ]
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["cos-aa", "monitoring"],
+  "templating": {
+    "list": [
+      {
+        "name": "tenant_id",
+        "type": "query",
+        "query": "label_values(cos_aa_ooda_cycles_total, tenant_id)",
+        "refresh": 2
+      }
+    ]
+  },
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "title": "COS-AA System Dashboard",
+  "uid": "cos-aa-system-v2"
+}

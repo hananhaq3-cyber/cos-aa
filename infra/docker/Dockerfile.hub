@@ -1,0 +1,27 @@
+# ─── COS-AA HUB (OODA Engine) ───
+FROM python:3.11-slim AS base
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
+WORKDIR /app
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    build-essential \
+    libpq-dev && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY pyproject.toml ./
+RUN pip install --upgrade pip && \
+    pip install ".[all]"
+
+COPY src/ src/
+COPY protos/ protos/
+
+HEALTHCHECK --interval=15s --timeout=5s --retries=3 \
+    CMD python -c "import asyncio; from src.db.redis_client import redis_client; asyncio.run(redis_client.client.ping())" || exit 1
+
+CMD ["python", "-m", "celery", "-A", "src.messaging.broker:celery_app", "worker", \
+     "--loglevel=info", "--concurrency=4", "-Q", "hub,default"]

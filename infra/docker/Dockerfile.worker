@@ -1,0 +1,28 @@
+# ─── COS-AA Celery Worker (Celery Beat + DLQ consumer) ───
+FROM python:3.11-slim AS base
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
+WORKDIR /app
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    build-essential \
+    libpq-dev && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY pyproject.toml ./
+RUN pip install --upgrade pip && \
+    pip install ".[all]"
+
+COPY src/ src/
+COPY protos/ protos/
+
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+    CMD python -c "import asyncio; from src.db.redis_client import redis_client; asyncio.run(redis_client.client.ping())" || exit 1
+
+# Run Celery Beat (scheduled tasks like memory consolidation)
+CMD ["celery", "-A", "src.messaging.broker:celery_app", "beat", \
+     "--loglevel=info", "--scheduler", "celery.beat:PersistentScheduler"]

@@ -1,0 +1,175 @@
+# Alertmanager configuration for COS-AA PagerDuty integration
+#
+# Severity levels:
+#   P1 (critical) - Immediate response required, system-wide impact
+#   P2 (high)     - Urgent response required, significant feature degradation
+#   P3 (medium)   - Response during business hours, limited impact
+#
+# Route rules:
+#   DLQ overflow        -> P2 (high)
+#   Circuit breaker open -> P2 (high)
+#   Leader failover      -> P1 (critical)
+#   Agent heartbeat      -> P3 (medium)
+
+global:
+  resolve_timeout: 5m
+  pagerduty_url: "https://events.pagerduty.com/v2/enqueue"
+
+# ── Templates ────────────────────────────────────────────────────────────────
+templates:
+  - "/etc/alertmanager/templates/cos-aa.tmpl"
+
+# ── Route Tree ───────────────────────────────────────────────────────────────
+route:
+  receiver: "cos-aa-default"
+  group_by: ["alertname"]
+  group_wait: 5m
+  group_interval: 30s
+  repeat_interval: 4h
+
+  routes:
+    # ── P1 Critical ────────────────────────────────────────────────────────
+    - match:
+        alertname: COS_AA_HUB_LEADER_FAILOVER
+      receiver: "cos-aa-p1-critical"
+      group_by: ["alertname"]
+      group_wait: 5m
+      group_interval: 30s
+      repeat_interval: 1h
+      continue: false
+
+    - match:
+        alertname: COS_AA_DLQ_CRITICAL
+      receiver: "cos-aa-p1-critical"
+      group_by: ["alertname"]
+      group_wait: 5m
+      group_interval: 30s
+      repeat_interval: 1h
+      continue: false
+
+    - match:
+        alertname: COS_AA_MULTI_CIRCUIT_BREAKER_OPEN
+      receiver: "cos-aa-p1-critical"
+      group_by: ["alertname"]
+      group_wait: 5m
+      group_interval: 30s
+      repeat_interval: 1h
+      continue: false
+
+    # ── P2 High ────────────────────────────────────────────────────────────
+    - match:
+        alertname: COS_AA_DLQ_OVERFLOW
+      receiver: "cos-aa-p2-high"
+      group_by: ["alertname"]
+      group_wait: 5m
+      group_interval: 30s
+      repeat_interval: 2h
+      continue: false
+
+    - match:
+        alertname: COS_AA_CIRCUIT_BREAKER_OPEN
+      receiver: "cos-aa-p2-high"
+      group_by: ["alertname"]
+      group_wait: 5m
+      group_interval: 30s
+      repeat_interval: 2h
+      continue: false
+
+    - match:
+        alertname: COS_AA_OODA_CYCLE_STUCK
+      receiver: "cos-aa-p2-high"
+      group_by: ["alertname"]
+      group_wait: 5m
+      group_interval: 30s
+      repeat_interval: 2h
+      continue: false
+
+    # ── P3 Medium ──────────────────────────────────────────────────────────
+    - match:
+        alertname: COS_AA_AGENT_HEARTBEAT_FAILURE
+      receiver: "cos-aa-p3-medium"
+      group_by: ["alertname"]
+      group_wait: 5m
+      group_interval: 30s
+      repeat_interval: 6h
+      continue: false
+
+    - match:
+        alertname: COS_AA_DLQ_WARNING
+      receiver: "cos-aa-p3-medium"
+      group_by: ["alertname"]
+      group_wait: 5m
+      group_interval: 30s
+      repeat_interval: 6h
+      continue: false
+
+# ── Receivers ────────────────────────────────────────────────────────────────
+receivers:
+  - name: "cos-aa-default"
+    pagerduty_configs:
+      - routing_key: "<PAGERDUTY_INTEGRATION_KEY_DEFAULT>"
+        severity: "warning"
+        description: '{{ template "pagerduty.default.description" . }}'
+        details:
+          alertname: "{{ .GroupLabels.alertname }}"
+          summary: "{{ .CommonAnnotations.summary }}"
+          runbook_url: "{{ .CommonAnnotations.runbook_url }}"
+
+  - name: "cos-aa-p1-critical"
+    pagerduty_configs:
+      - routing_key: "<PAGERDUTY_INTEGRATION_KEY_P1>"
+        severity: "critical"
+        description: '[P1 CRITICAL] {{ .GroupLabels.alertname }}'
+        details:
+          alertname: "{{ .GroupLabels.alertname }}"
+          severity: "P1"
+          summary: "{{ .CommonAnnotations.summary }}"
+          runbook_url: "{{ .CommonAnnotations.runbook_url }}"
+          impact: "System-wide impact. Immediate response required."
+
+  - name: "cos-aa-p2-high"
+    pagerduty_configs:
+      - routing_key: "<PAGERDUTY_INTEGRATION_KEY_P2>"
+        severity: "error"
+        description: '[P2 HIGH] {{ .GroupLabels.alertname }}'
+        details:
+          alertname: "{{ .GroupLabels.alertname }}"
+          severity: "P2"
+          summary: "{{ .CommonAnnotations.summary }}"
+          runbook_url: "{{ .CommonAnnotations.runbook_url }}"
+          impact: "Significant feature degradation. Urgent response required."
+
+  - name: "cos-aa-p3-medium"
+    pagerduty_configs:
+      - routing_key: "<PAGERDUTY_INTEGRATION_KEY_P3>"
+        severity: "warning"
+        description: '[P3 MEDIUM] {{ .GroupLabels.alertname }}'
+        details:
+          alertname: "{{ .GroupLabels.alertname }}"
+          severity: "P3"
+          summary: "{{ .CommonAnnotations.summary }}"
+          runbook_url: "{{ .CommonAnnotations.runbook_url }}"
+          impact: "Limited impact. Response during business hours."
+
+# ── Inhibition Rules ─────────────────────────────────────────────────────────
+# Suppress lower-severity DLQ alerts when the critical DLQ alert is firing
+inhibit_rules:
+  - source_match:
+      alertname: COS_AA_DLQ_CRITICAL
+    target_match:
+      alertname: COS_AA_DLQ_OVERFLOW
+    equal: ["alertname_group"]
+
+  - source_match:
+      alertname: COS_AA_DLQ_OVERFLOW
+    target_match:
+      alertname: COS_AA_DLQ_WARNING
+    equal: ["alertname_group"]
+
+  # Suppress agent heartbeat alerts when leader failover is active
+  # (agents will naturally lose heartbeat if the HUB is down)
+  - source_match:
+      alertname: COS_AA_HUB_LEADER_FAILOVER
+    target_match:
+      alertname: COS_AA_AGENT_HEARTBEAT_FAILURE
+    equal: ["namespace"]

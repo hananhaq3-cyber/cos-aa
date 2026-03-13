@@ -1,0 +1,34 @@
+# Celery Beat — single instance only (leader election)
+replicaCount: 1
+
+image:
+  repository: ghcr.io/<GITHUB_ORG>/cos-aa-worker
+  tag: "latest"
+  pullPolicy: Always
+
+resources:
+  limits:
+    cpu: "250m"
+    memory: "256Mi"
+  requests:
+    cpu: "100m"
+    memory: "128Mi"
+
+env:
+  - name: APP_ENV
+    value: "production"
+  - name: POSTGRES_URL
+    valueFrom:
+      secretKeyRef:
+        name: cos-aa-secrets
+        key: postgres-url
+  - name: REDIS_URL
+    valueFrom:
+      secretKeyRef:
+        name: cos-aa-secrets
+        key: redis-url
+  - name: CELERY_BROKER_URL
+    valueFrom:
+      secretKeyRef:
+        name: cos-aa-secrets
+        key: celery-broker-url

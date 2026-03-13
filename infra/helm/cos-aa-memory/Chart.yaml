@@ -1,0 +1,6 @@
+apiVersion: v2
+name: cos-aa-memory
+description: COS-AA Memory service Helm chart (if deployed as separate microservice)
+type: application
+version: 1.0.0
+appVersion: "2.0.0"

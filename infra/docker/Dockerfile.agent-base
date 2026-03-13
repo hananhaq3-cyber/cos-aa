@@ -1,0 +1,32 @@
+# ─── COS-AA Agent Base Image ───
+# All specialized agents (planning, learning, monitoring, knowledge, created)
+# inherit from this base image.
+FROM python:3.11-slim AS base
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
+WORKDIR /app
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    build-essential \
+    libpq-dev && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY pyproject.toml ./
+RUN pip install --upgrade pip && \
+    pip install ".[all]"
+
+COPY src/ src/
+COPY protos/ protos/
+
+# Default: run as a Celery worker consuming the agent's queue
+# Override AGENT_QUEUE env var per agent type
+ENV AGENT_QUEUE=planning
+
+HEALTHCHECK --interval=15s --timeout=5s --retries=3 \
+    CMD python -c "import asyncio; from src.db.redis_client import redis_client; asyncio.run(redis_client.client.ping())" || exit 1
+
+CMD ["sh", "-c", "celery -A src.messaging.broker:celery_app worker --loglevel=info --concurrency=2 -Q ${AGENT_QUEUE}"]

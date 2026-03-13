@@ -1,0 +1,6 @@
+apiVersion: v2
+name: cos-aa-agents
+description: COS-AA Agent workers Helm chart
+type: application
+version: 1.0.0
+appVersion: "2.0.0"

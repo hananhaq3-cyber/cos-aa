@@ -1,0 +1,12 @@
+# ─── COS-AA Caddy Reverse Proxy ───
+# Auto-provisions Let's Encrypt HTTPS certificates.
+# Usage: Set DOMAIN env var, then: sudo caddy run --config /path/to/Caddyfile
+#
+# Before running: point your domain's A record to this server's public IP.
+
+{$DOMAIN:localhost} {
+    # Frontend SPA
+    reverse_proxy /api/* localhost:8080
+    reverse_proxy /ws/* localhost:8080
+    reverse_proxy /* localhost:3000
+}

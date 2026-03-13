@@ -1,0 +1,167 @@
+syntax = "proto3";
+
+package memory;
+
+option java_multiple_files = true;
+option go_package = "github.com/<GITHUB_ORG>/cos-aa/protos/memory";
+
+// ═══════════════════════════════════════════════════════════════
+// Memory Service — gRPC interface for multi-tier memory operations
+// ═══════════════════════════════════════════════════════════════
+
+service MemoryService {
+  // Episodic memory (PostgreSQL)
+  rpc WriteEpisodic(WriteEpisodicRequest) returns (WriteEpisodicResponse);
+  rpc QueryEpisodic(QueryEpisodicRequest) returns (QueryEpisodicResponse);
+
+  // Working memory (Redis)
+  rpc ReadWorkingMemory(ReadWorkingRequest) returns (WorkingMemoryState);
+  rpc UpdateWorkingMemory(UpdateWorkingRequest) returns (UpdateWorkingResponse);
+
+  // Semantic memory (Vector store)
+  rpc StoreSemantic(StoreSemanticRequest) returns (StoreSemanticResponse);
+  rpc RetrieveSemantic(SemanticQueryRequest) returns (SemanticQueryResponse);
+
+  // Procedural memory (PostgreSQL)
+  rpc StoreProceduralPattern(PatternRequest) returns (PatternResponse);
+  rpc GetBestPattern(PatternMatchRequest) returns (PatternMatchResponse);
+
+  // Health
+  rpc HealthCheck(HealthRequest) returns (HealthResponse);
+}
+
+// ─── Common ───
+
+message HealthRequest {}
+
+message HealthResponse {
+  bool healthy = 1;
+  map<string, bool> checks = 2;
+  string message = 3;
+}
+
+message MemoryFragment {
+  string fragment_id = 1;
+  string content = 2;
+  string summary = 3;
+  float relevance_score = 4;
+  string source_type = 5;
+  string created_at = 6;
+  repeated string tags = 7;
+  string tier = 8;
+}
+
+// ─── Episodic ───
+
+message WriteEpisodicRequest {
+  string tenant_id = 1;
+  string session_id = 2;
+  string event_type = 3;
+  string content_json = 4;
+  float importance_score = 5;
+  repeated string tags = 6;
+}
+
+message WriteEpisodicResponse {
+  string event_id = 1;
+  bool success = 2;
+}
+
+message QueryEpisodicRequest {
+  string tenant_id = 1;
+  string session_id = 2;
+  int32 limit = 3;
+  string event_type_filter = 4;
+  float min_importance = 5;
+}
+
+message QueryEpisodicResponse {
+  repeated MemoryFragment results = 1;
+  int32 total = 2;
+}
+
+// ─── Working Memory ───
+
+message ReadWorkingRequest {
+  string tenant_id = 1;
+  string session_id = 2;
+}
+
+message WorkingMemoryState {
+  string tenant_id = 1;
+  string session_id = 2;
+  map<string, string> fields = 3;
+  bool exists = 4;
+}
+
+message UpdateWorkingRequest {
+  string tenant_id = 1;
+  string session_id = 2;
+  string field = 3;
+  string value_json = 4;
+}
+
+message UpdateWorkingResponse {
+  bool success = 1;
+}
+
+// ─── Semantic ───
+
+message StoreSemanticRequest {
+  string tenant_id = 1;
+  string content = 2;
+  map<string, string> metadata = 3;
+  repeated string tags = 4;
+}
+
+message StoreSemanticResponse {
+  string document_id = 1;
+  bool success = 2;
+}
+
+message SemanticQueryRequest {
+  string tenant_id = 1;
+  string query_text = 2;
+  int32 top_k = 3;
+  repeated string filter_tags = 4;
+  string source_type_filter = 5;
+}
+
+message SemanticQueryResponse {
+  repeated MemoryFragment results = 1;
+  float retrieval_latency_ms = 2;
+}
+
+// ─── Procedural ───
+
+message PatternRequest {
+  string tenant_id = 1;
+  string task_type = 2;
+  string strategy_description = 3;
+  repeated string context_tags = 4;
+}
+
+message PatternResponse {
+  string pattern_id = 1;
+  bool success = 2;
+}
+
+message PatternMatchRequest {
+  string tenant_id = 1;
+  string task_type = 2;
+  repeated string context_tags = 3;
+  int32 top_k = 4;
+}
+
+message PatternMatchResponse {
+  repeated ProceduralPattern patterns = 1;
+}
+
+message ProceduralPattern {
+  string pattern_id = 1;
+  string task_type = 2;
+  string strategy_description = 3;
+  float success_rate = 4;
+  int32 use_count = 5;
+  repeated string context_tags = 6;
+}

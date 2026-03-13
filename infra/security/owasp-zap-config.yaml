@@ -1,0 +1,188 @@
+# ============================================================================
+# COS-AA OWASP ZAP API Security Scanning Configuration
+# ============================================================================
+# Dynamic Application Security Testing (DAST) config for the COS-AA REST API.
+# Usage:
+#   zap.sh -cmd -configfile infra/security/owasp-zap-config.yaml
+#   docker run --rm -v $(pwd):/zap/wrk owasp/zap2docker-stable zap-api-scan.py \
+#       -t http://localhost:8000 -f openapi -c infra/security/owasp-zap-config.yaml
+# ============================================================================
+
+# ---------------------------------------------------------------------------
+# Target application
+# ---------------------------------------------------------------------------
+target:
+  url: "http://localhost:8000"
+  description: "COS-AA API Gateway -- FastAPI/Uvicorn on port 8000"
+
+# ---------------------------------------------------------------------------
+# API endpoints to test
+# ---------------------------------------------------------------------------
+api:
+  endpoints:
+    # --- Session management ---
+    - path: /api/v1/sessions
+      methods:
+        - POST
+        - GET
+      description: "Create and list cognitive agent sessions"
+
+    - path: /api/v1/sessions/{id}/messages
+      methods:
+        - POST
+        - GET
+      description: "Send messages to and retrieve messages from a session"
+
+    # --- Agent management ---
+    - path: /api/v1/agents
+      methods:
+        - GET
+      description: "List available cognitive agent types"
+
+    - path: /api/v1/agents/spawn
+      methods:
+        - POST
+      description: "Spawn a new agent instance"
+
+    # --- Memory subsystem ---
+    - path: /api/v1/memory/search
+      methods:
+        - POST
+      description: "Semantic search across agent memory stores"
+
+    # --- Administration ---
+    - path: /api/v1/admin/keys
+      methods:
+        - GET
+        - POST
+      description: "Manage API keys (admin-only)"
+
+    - path: /api/v1/admin/quotas
+      methods:
+        - GET
+      description: "View rate-limit and usage quotas (admin-only)"
+
+    # --- Observability ---
+    - path: /api/v1/observability/health
+      methods:
+        - GET
+      description: "Health check / readiness probe endpoint"
+
+# ---------------------------------------------------------------------------
+# Scan types
+# ---------------------------------------------------------------------------
+scan:
+  # Active scan -- sends crafted payloads to detect vulnerabilities such as
+  # SQL injection, XSS, command injection, SSRF, etc.
+  active:
+    enabled: true
+    policy: "API-Scan"
+    strength: MEDIUM        # LOW | MEDIUM | HIGH | INSANE
+    threshold: MEDIUM       # OFF | LOW | MEDIUM | HIGH
+    max_duration_minutes: 60
+    technologies:
+      - Python
+      - Linux
+      - PostgreSQL
+      - Redis
+
+  # Passive scan -- analyses responses for information leakage, missing
+  # security headers, insecure cookies, etc.  Zero additional requests.
+  passive:
+    enabled: true
+    max_alerts_per_rule: 10
+    scan_only_in_scope: true
+
+  # Spider -- automatically discovers additional endpoints and parameters
+  # by crawling links and forms.
+  spider:
+    enabled: true
+    max_depth: 5
+    max_duration_minutes: 10
+    handle_parameters: IGNORE_COMPLETELY
+    # Limit the spider to the API path prefix.
+    subtree_only: true
+    url_regex_filter: "^http://localhost:8000/api/.*"
+
+# ---------------------------------------------------------------------------
+# Alert threshold
+# ---------------------------------------------------------------------------
+# Minimum risk level that triggers a pipeline failure.
+#   Informational < LOW < MEDIUM < HIGH
+alert:
+  threshold: MEDIUM
+  # Exit code when alerts at or above the threshold are found.
+  fail_exit_code: 2
+  # Maximum number of alerts to include in the summary output.
+  max_alerts_in_summary: 50
+
+# ---------------------------------------------------------------------------
+# Authentication
+# ---------------------------------------------------------------------------
+authentication:
+  type: bearer_token
+  header:
+    name: Authorization
+    value: "Bearer ${ZAP_AUTH_TOKEN}"  # Set via environment variable
+  # Optional: endpoint for automated token acquisition during CI.
+  token_endpoint:
+    url: "http://localhost:8000/api/v1/auth/token"
+    method: POST
+    body:
+      grant_type: "client_credentials"
+      client_id: "${ZAP_CLIENT_ID}"
+      client_secret: "${ZAP_CLIENT_SECRET}"
+    token_json_path: "$.access_token"
+    token_ttl_seconds: 3600
+
+  # Requests to these paths are sent WITHOUT an auth header so ZAP can
+  # verify that unauthenticated access is correctly denied.
+  unauthenticated_paths:
+    - /api/v1/observability/health
+    - /api/v1/admin/keys
+    - /api/v1/admin/quotas
+
+# ---------------------------------------------------------------------------
+# Report output
+# ---------------------------------------------------------------------------
+reports:
+  # Human-readable HTML report.
+  - format: html
+    output: reports/zap-report.html
+    title: "COS-AA API Security Scan Report"
+    description: "OWASP ZAP DAST results for the COS-AA REST API"
+
+  # Machine-readable JSON report for CI/CD integration.
+  - format: json
+    output: reports/zap-report.json
+
+# ---------------------------------------------------------------------------
+# Global scanner settings
+# ---------------------------------------------------------------------------
+connection:
+  timeout_seconds: 30
+  # Number of concurrent scanning threads.
+  threads: 5
+  # Delay between requests to avoid overloading the target.
+  delay_ms: 50
+
+# Rules to explicitly disable (false positives, not applicable, etc.).
+disabled_rules: []
+  # Example:
+  # - id: 10096    # Timestamp Disclosure
+  #   reason: "Timestamps are intentionally exposed in API responses"
+
+# ---------------------------------------------------------------------------
+# Scope restrictions
+# ---------------------------------------------------------------------------
+scope:
+  # Only scan URLs that match this regex.
+  include:
+    - "http://localhost:8000/api/.*"
+  # Never send scan traffic to these paths.
+  exclude:
+    - "http://localhost:8000/metrics"
+    - "http://localhost:8000/health"
+    - "http://localhost:8000/docs"
+    - "http://localhost:8000/redoc"
+    - "http://localhost:8000/openapi.json"

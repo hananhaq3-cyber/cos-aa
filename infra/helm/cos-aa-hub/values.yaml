@@ -1,0 +1,46 @@
+replicaCount: 2
+
+image:
+  repository: ghcr.io/<GITHUB_ORG>/cos-aa-hub
+  tag: "latest"
+  pullPolicy: Always
+
+resources:
+  limits:
+    cpu: "1000m"
+    memory: "1Gi"
+  requests:
+    cpu: "500m"
+    memory: "512Mi"
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 8
+  targetCPUUtilizationPercentage: 60
+
+env:
+  - name: APP_ENV
+    value: "production"
+  - name: POSTGRES_URL
+    valueFrom:
+      secretKeyRef:
+        name: cos-aa-secrets
+        key: postgres-url
+  - name: REDIS_URL
+    valueFrom:
+      secretKeyRef:
+        name: cos-aa-secrets
+        key: redis-url
+  - name: CELERY_BROKER_URL
+    valueFrom:
+      secretKeyRef:
+        name: cos-aa-secrets
+        key: celery-broker-url
+  - name: OPENAI_API_KEY
+    valueFrom:
+      secretKeyRef:
+        name: cos-aa-secrets
+        key: openai-api-key
+  - name: OTLP_ENDPOINT
+    value: "http://jaeger-collector:4317"

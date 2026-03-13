@@ -1,0 +1,6 @@
+apiVersion: v2
+name: cos-aa-worker
+description: COS-AA Celery Beat worker Helm chart
+type: application
+version: 1.0.0
+appVersion: "2.0.0"

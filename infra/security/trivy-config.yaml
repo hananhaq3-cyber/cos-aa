@@ -1,0 +1,113 @@
+# ============================================================================
+# COS-AA Trivy Container CVE Scanning Configuration
+# ============================================================================
+# Aqua Trivy scanner config for container image vulnerability assessment.
+# Usage:
+#   trivy image --config infra/security/trivy-config.yaml <image>
+#   trivy image --config infra/security/trivy-config.yaml ghcr.io/<GITHUB_ORG>/cos-aa-api:latest
+# ============================================================================
+
+# ---------------------------------------------------------------------------
+# Scan severity thresholds
+# ---------------------------------------------------------------------------
+severity:
+  - CRITICAL
+  - HIGH
+
+# ---------------------------------------------------------------------------
+# Target container images
+# ---------------------------------------------------------------------------
+images:
+  - name: ghcr.io/<GITHUB_ORG>/cos-aa-hub:latest
+    description: "Orchestration hub -- routes messages between agents"
+  - name: ghcr.io/<GITHUB_ORG>/cos-aa-worker:latest
+    description: "Agent worker -- executes cognitive tasks"
+  - name: ghcr.io/<GITHUB_ORG>/cos-aa-api:latest
+    description: "REST/WebSocket API gateway -- serves external clients"
+
+# ---------------------------------------------------------------------------
+# Vulnerability handling
+# ---------------------------------------------------------------------------
+vulnerability:
+  # Ignore vulnerabilities that have no available fix yet.  This keeps the
+  # report focused on actionable items.
+  ignore-unfixed: true
+
+  # Type of security data to scan for.
+  type:
+    - os          # OS package vulnerabilities (apt, apk, etc.)
+    - library     # Language-specific dependency vulnerabilities (pip, npm, etc.)
+
+# ---------------------------------------------------------------------------
+# Exit codes
+# ---------------------------------------------------------------------------
+# CI/CD gates: a non-zero exit code fails the pipeline.
+exit-code:
+  # Return exit-code 1 when any CRITICAL vulnerability is found.
+  on-critical: 1
+  # Return exit-code 0 for HIGH (warn only, do not block deployment).
+  on-high: 0
+
+# ---------------------------------------------------------------------------
+# Output configuration
+# ---------------------------------------------------------------------------
+format:
+  # Primary human-readable output.
+  - type: table
+    output: stdout
+
+  # Machine-readable output persisted as a CI artifact.
+  - type: json
+    output: reports/trivy-results.json
+
+# ---------------------------------------------------------------------------
+# Report & cache settings
+# ---------------------------------------------------------------------------
+cache:
+  # Local directory for the vulnerability database cache.
+  dir: .cache/trivy
+
+db:
+  # Automatically download / update the vulnerability DB before each scan.
+  auto-update: true
+
+# ---------------------------------------------------------------------------
+# .trivyignore -- acceptable known CVEs
+# ---------------------------------------------------------------------------
+# List specific CVE IDs below that have been reviewed and accepted by the
+# security team.  Each entry should include a justification comment.
+#
+# Example:
+#   - id: CVE-2023-XXXXX
+#     reason: "False positive -- package not used at runtime"
+#     expires: "2026-06-01"
+#
+# Entries are automatically expired after the date in `expires`, at which
+# point the CVE will surface again in scan results.
+# ---------------------------------------------------------------------------
+trivyignore:
+  patterns: []
+  # -------------------------------------------------------------------------
+  # Add accepted CVEs here. Template:
+  #
+  # - id: CVE-YYYY-NNNNN
+  #   reason: "<justification reviewed by security team>"
+  #   approved_by: "<name or team>"
+  #   expires: "YYYY-MM-DD"
+  # -------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Miscellaneous scanner options
+# ---------------------------------------------------------------------------
+timeout: 10m
+
+# Skip scanning of files larger than 100 MB inside the image layers.
+skip-files:
+  - "**/*.pyc"
+  - "**/__pycache__/**"
+
+# Skip entire directories that are known to be non-production.
+skip-dirs:
+  - "tests/"
+  - "docs/"
+  - ".git/"
