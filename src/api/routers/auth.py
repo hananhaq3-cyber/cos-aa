@@ -46,63 +46,75 @@ def _build_auth_response(
 @router.post("/login", response_model=AuthResponse)
 async def login(body: LoginRequest):
     """Authenticate with email and password."""
-    async with get_session(tenant_id=None) as session:
-        result = await session.execute(
-            select(User).where(User.email == body.email)
-        )
-        user = result.scalar_one_or_none()
+    try:
+        async with get_session(tenant_id=None) as session:
+            result = await session.execute(
+                select(User).where(User.email == body.email)
+            )
+            user = result.scalar_one_or_none()
 
-    if not user or not user.hashed_password:
-        raise HTTPException(status_code=401, detail="Invalid email or password")
+        if not user or not user.hashed_password:
+            raise HTTPException(status_code=401, detail="Invalid email or password")
 
-    if not verify_password(body.password, user.hashed_password):
-        raise HTTPException(status_code=401, detail="Invalid email or password")
+        if not verify_password(body.password, user.hashed_password):
+            raise HTTPException(status_code=401, detail="Invalid email or password")
 
-    return _build_auth_response(user.id, user.tenant_id, user.email, user.role)
+        return _build_auth_response(user.id, user.tenant_id, user.email, user.role)
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Login error: {type(e).__name__}: {e}")
+        raise HTTPException(status_code=500, detail=f"Login failed: {str(e)}")
 
 
 @router.post("/register", response_model=AuthResponse)
 async def register(body: RegisterRequest):
     """Create a new tenant and user account."""
-    async with get_session(tenant_id=None) as session:
-        # Check if email already exists
-        existing = await session.execute(
-            select(User).where(User.email == body.email)
-        )
-        if existing.scalar_one_or_none():
-            raise HTTPException(status_code=409, detail="Email already registered")
+    try:
+        async with get_session(tenant_id=None) as session:
+            # Check if email already exists
+            existing = await session.execute(
+                select(User).where(User.email == body.email)
+            )
+            if existing.scalar_one_or_none():
+                raise HTTPException(status_code=409, detail="Email already registered")
 
-        # Check if tenant name already exists
-        existing_tenant = await session.execute(
-            select(Tenant).where(Tenant.name == body.tenant_name)
-        )
-        if existing_tenant.scalar_one_or_none():
-            raise HTTPException(status_code=409, detail="Organization name already taken")
+            # Check if tenant name already exists
+            existing_tenant = await session.execute(
+                select(Tenant).where(Tenant.name == body.tenant_name)
+            )
+            if existing_tenant.scalar_one_or_none():
+                raise HTTPException(status_code=409, detail="Organization name already taken")
 
-        # Create tenant
-        tenant = Tenant(
-            name=body.tenant_name,
-            quotas={
-                "max_sessions_per_day": 1000,
-                "max_llm_tokens_per_day": 5000000,
-                "max_agents": 20,
-                "max_concurrent_tasks": 50,
-            },
-        )
-        session.add(tenant)
-        await session.flush()
+            # Create tenant
+            tenant = Tenant(
+                name=body.tenant_name,
+                quotas={
+                    "max_sessions_per_day": 1000,
+                    "max_llm_tokens_per_day": 5000000,
+                    "max_agents": 20,
+                    "max_concurrent_tasks": 50,
+                },
+            )
+            session.add(tenant)
+            await session.flush()
 
-        # Create user as admin of new tenant
-        user = User(
-            tenant_id=tenant.id,
-            email=body.email,
-            hashed_password=hash_password(body.password),
-            role="admin",
-        )
-        session.add(user)
-        await session.flush()
+            # Create user as admin of new tenant
+            user = User(
+                tenant_id=tenant.id,
+                email=body.email,
+                hashed_password=hash_password(body.password),
+                role="admin",
+            )
+            session.add(user)
+            await session.flush()
 
-    return _build_auth_response(user.id, tenant.id, user.email, user.role)
+        return _build_auth_response(user.id, tenant.id, user.email, user.role)
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Register error: {type(e).__name__}: {e}")
+        raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
 
 
 # ── OAuth ──
