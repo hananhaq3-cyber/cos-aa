@@ -86,9 +86,15 @@ class Settings(BaseSettings):
     sandbox_backend: Literal["subprocess", "docker", "gvisor"] = "subprocess"
 
     def __init__(self, **kwargs):
-        # Railway compatibility: Accept DATABASE_URL as POSTGRES_URL
+        # Railway compatibility: Convert DATABASE_URL to asyncpg format
         if not kwargs.get("postgres_url"):
-            kwargs["postgres_url"] = os.getenv("DATABASE_URL") or os.getenv("POSTGRES_URL") or "postgresql+asyncpg://cos_user:cos_pass@localhost:5432/cos_aa"
+            db_url = os.getenv("DATABASE_URL") or os.getenv("POSTGRES_URL") or "postgresql+asyncpg://cos_user:cos_pass@localhost:5432/cos_aa"
+            # Convert postgres:// to postgresql+asyncpg:// for async driver
+            if db_url.startswith("postgres://"):
+                db_url = db_url.replace("postgres://", "postgresql+asyncpg://", 1)
+            elif db_url.startswith("postgresql://"):
+                db_url = db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+            kwargs["postgres_url"] = db_url
         if not kwargs.get("redis_url"):
             kwargs["redis_url"] = os.getenv("REDIS_URL") or "redis://localhost:6379/0"
         super().__init__(**kwargs)
