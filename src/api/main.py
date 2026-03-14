@@ -38,11 +38,13 @@ def create_app() -> FastAPI:
         allowed_origins = [
             f"https://app.{settings.cors_domain}",
             f"https://api.{settings.cors_domain}",
+            "https://cos-aa.vercel.app",  # Frontend deployed on Vercel
         ]
     elif settings.app_env == "staging":
         allowed_origins = [
             f"https://app.staging.{settings.cors_domain}",
             f"https://api.staging.{settings.cors_domain}",
+            "https://cos-aa.vercel.app",  # Frontend deployed on Vercel
         ]
     else:
         allowed_origins = ["*"]
