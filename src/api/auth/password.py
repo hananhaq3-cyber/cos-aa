@@ -5,20 +5,16 @@ from passlib.context import CryptContext
 
 _pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# Bcrypt has a 72-byte limit for passwords
-MAX_PASSWORD_LENGTH = 72
-
 
 def hash_password(plain: str) -> str:
-    """Hash password with bcrypt (truncates to 72 bytes if needed)."""
-    # Bcrypt only supports up to 72 bytes
-    truncated = plain[:MAX_PASSWORD_LENGTH]
-    return _pwd_context.hash(truncated)
+    """Hash password with bcrypt."""
+    # Password length is validated in auth_schemas.py (max 72 bytes for bcrypt)
+    return _pwd_context.hash(plain)
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    """Verify password against hash (truncates to 72 bytes if needed)."""
-    # Bcrypt only supports up to 72 bytes
-    truncated = plain[:MAX_PASSWORD_LENGTH]
-    return _pwd_context.verify(truncated, hashed)
+    """Verify password against hash."""
+    # Password length is validated in auth_schemas.py (max 72 bytes for bcrypt)
+    return _pwd_context.verify(plain, hashed)
+
 
