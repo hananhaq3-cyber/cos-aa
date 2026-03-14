@@ -1,5 +1,5 @@
 {
-  "buildCommand": "cd frontend && npm run build",
+  "buildCommand": "cd frontend && VITE_API_URL=https://cos-aa-production.up.railway.app npm run build",
   "outputDirectory": "frontend/dist",
   "framework": "vite"
 }
