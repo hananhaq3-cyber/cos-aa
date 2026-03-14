@@ -17,12 +17,23 @@ from src.db.redis_client import redis_client
 async def lifespan(app: FastAPI):
     """Application startup/shutdown lifecycle."""
     # Startup
-    await redis_client.connect()
-    await redis_client.client.ping()
+    try:
+        await redis_client.connect()
+        await redis_client.client.ping()
+    except Exception as e:
+        print(f"⚠️  Warning: Redis connection failed ({e}). Continuing without Redis.")
+
     yield
+
     # Shutdown
-    await engine.dispose()
-    await redis_client.close()
+    try:
+        await engine.dispose()
+    except:
+        pass
+    try:
+        await redis_client.close()
+    except:
+        pass
 
 
 def create_app() -> FastAPI:
