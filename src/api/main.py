@@ -38,20 +38,25 @@ def create_app() -> FastAPI:
         allowed_origins = [
             f"https://app.{settings.cors_domain}",
             f"https://api.{settings.cors_domain}",
-            "https://cos-aa.vercel.app",  # Frontend deployed on Vercel
+            "https://cos-aa.vercel.app",  # Production frontend on Vercel
         ]
+        # Also allow all Vercel preview deployments during development
+        allow_origin_regex = r"https://.*\.vercel\.app"
     elif settings.app_env == "staging":
         allowed_origins = [
             f"https://app.staging.{settings.cors_domain}",
             f"https://api.staging.{settings.cors_domain}",
-            "https://cos-aa.vercel.app",  # Frontend deployed on Vercel
+            "https://cos-aa.vercel.app",
         ]
+        allow_origin_regex = r"https://.*\.vercel\.app"
     else:
         allowed_origins = ["*"]
+        allow_origin_regex = None
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=allowed_origins,
+        allow_origins=allowed_origins if allow_origin_regex is None else [],
+        allow_origin_regex=allow_origin_regex,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
