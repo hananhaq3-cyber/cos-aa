@@ -11,16 +11,22 @@ from fastapi.middleware.cors import CORSMiddleware
 from src.core.config import settings
 from src.db.postgres import engine
 from src.db.redis_client import redis_client
+from src.db.init_db import init_db
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application startup/shutdown lifecycle."""
     # Startup
+    print("🚀 Starting COS-AA backend...")
     await redis_client.connect()
     await redis_client.client.ping()
+    print("✅ Redis connected")
+    await init_db()
+    print("✅ Database initialized")
     yield
     # Shutdown
+    print("🛑 Shutting down COS-AA backend...")
     await engine.dispose()
     await redis_client.close()
 
