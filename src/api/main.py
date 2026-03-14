@@ -17,6 +17,7 @@ from src.db.redis_client import redis_client
 async def lifespan(app: FastAPI):
     """Application startup/shutdown lifecycle."""
     # Startup
+    await redis_client.connect()
     await redis_client.client.ping()
     yield
     # Shutdown
