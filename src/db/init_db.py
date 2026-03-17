@@ -15,35 +15,14 @@ from src.db.models.audit import AuditEvent
 from src.db.models.session import UserSession
 
 
-# Columns that may be missing from existing tables (migration 005-008)
-_MISSING_COLUMNS = [
-    # migration 005: OAuth columns on users
-    ("users", "oauth_provider", "VARCHAR(32)", None),
-    ("users", "oauth_provider_id", "VARCHAR(256)", None),
-    # migration 007: email verification columns on users
-    ("users", "email_verified", "BOOLEAN NOT NULL", "'false'"),
-    ("users", "email_verified_at", "TIMESTAMPTZ", None),
-    # migration 008: goal column on sessions
-    ("sessions", "goal", "TEXT", None),
+# Raw ALTER TABLE statements using IF NOT EXISTS (PostgreSQL 9.6+)
+_ALTER_STATEMENTS = [
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS oauth_provider VARCHAR(32)",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS oauth_provider_id VARCHAR(256)",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT false",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMPTZ",
+    "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS goal TEXT",
 ]
-
-
-async def _add_missing_columns(conn):
-    """Add columns that create_all cannot add to existing tables."""
-    for table, column, col_type, default in _MISSING_COLUMNS:
-        try:
-            check = await conn.execute(text(
-                "SELECT 1 FROM information_schema.columns "
-                "WHERE table_name = :tbl AND column_name = :col"
-            ), {"tbl": table, "col": column})
-            if check.fetchone() is None:
-                ddl = f'ALTER TABLE {table} ADD COLUMN {column} {col_type}'
-                if default:
-                    ddl += f' DEFAULT {default}'
-                await conn.execute(text(ddl))
-                print(f"  ✅ Added column {table}.{column}")
-        except Exception as e:
-            print(f"  ⚠️  Column {table}.{column}: {e}")
 
 
 async def init_db():
@@ -51,8 +30,17 @@ async def init_db():
     try:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
-            await _add_missing_columns(conn)
-        print("✅ Database tables initialized successfully")
+            print("✅ Tables created/verified")
+
+            # Add missing columns to existing tables
+            for stmt in _ALTER_STATEMENTS:
+                try:
+                    await conn.execute(text(stmt))
+                except Exception as e:
+                    print(f"  ⚠️  ALTER: {e}")
+            print("✅ Missing columns applied")
+
+        print("✅ Database initialized successfully")
     except ProgrammingError as e:
         print(f"⚠️  Database initialization warning: {e}")
     except Exception as e:
