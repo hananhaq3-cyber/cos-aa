@@ -26,7 +26,8 @@ async def init_db():
         print(f"❌ Table creation failed: {e}")
         raise
 
-    # Step 2: Add missing columns in a SEPARATE transaction
+    # Step 2: Add missing columns - EACH in its own transaction
+    # so one failure doesn't roll back the others
     alter_statements = [
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS oauth_provider VARCHAR(32)",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS oauth_provider_id VARCHAR(256)",
@@ -34,15 +35,13 @@ async def init_db():
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMPTZ",
         "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS goal TEXT",
     ]
-    try:
-        async with engine.begin() as conn:
-            for stmt in alter_statements:
-                print(f"  Running: {stmt[:60]}...")
+    for stmt in alter_statements:
+        try:
+            async with engine.begin() as conn:
                 await conn.execute(text(stmt))
-        print("✅ Missing columns applied")
-    except Exception as e:
-        print(f"❌ Column migration failed: {e}")
-        # Don't raise - allow app to start even if ALTER fails
+            print(f"  ✅ {stmt[:60]}")
+        except Exception as e:
+            print(f"  ⚠️ {stmt[:40]}... skipped: {e}")
 
     print("✅ Database initialized successfully")
 

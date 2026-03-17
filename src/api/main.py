@@ -129,16 +129,13 @@ def create_app() -> FastAPI:
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMPTZ",
             "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS goal TEXT",
         ]
-        try:
-            async with engine.begin() as conn:
-                for stmt in stmts:
-                    try:
-                        await conn.execute(sa_text(stmt))
-                        results.append({"sql": stmt[:50], "status": "ok"})
-                    except Exception as e:
-                        results.append({"sql": stmt[:50], "status": "error", "error": str(e)})
-        except Exception as e:
-            return {"status": "connection_error", "error": str(e)}
+        for stmt in stmts:
+            try:
+                async with engine.begin() as conn:
+                    await conn.execute(sa_text(stmt))
+                results.append({"sql": stmt[:50], "status": "ok"})
+            except Exception as e:
+                results.append({"sql": stmt[:50], "status": "error", "error": str(e)[:100]})
         return {"status": "done", "results": results}
 
     @app.get("/debug-db", tags=["root"])
