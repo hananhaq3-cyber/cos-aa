@@ -101,8 +101,9 @@ def create_app() -> FastAPI:
     async def root():
         return {
             "service": "COS-AA",
-            "version": "2.0.0",
+            "version": "2.1.0",
             "status": "running",
+            "build": "aa7c6c5-dbfix",
         }
 
     @app.get("/health", tags=["root"])
