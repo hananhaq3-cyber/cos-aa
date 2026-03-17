@@ -13,7 +13,7 @@ from src.core.exceptions import AuthenticationError
 
 class TenantContextMiddleware(BaseHTTPMiddleware):
 
-    SKIP_PATHS = {"/health", "/docs", "/openapi.json", "/redoc", "/", "/migrate"}
+    SKIP_PATHS = {"/health", "/docs", "/openapi.json", "/redoc", "/", "/migrate", "/debug-db"}
     # Only skip auth routes that don't require authentication
     SKIP_PREFIXES = (
         "/api/v1/auth/login",

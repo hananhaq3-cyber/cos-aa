@@ -141,6 +141,25 @@ def create_app() -> FastAPI:
             return {"status": "connection_error", "error": str(e)}
         return {"status": "done", "results": results}
 
+    @app.get("/debug-db", tags=["root"])
+    async def debug_db():
+        """Debug: show users table columns and search_path."""
+        from sqlalchemy import text as sa_text
+        try:
+            async with engine.begin() as conn:
+                sp = await conn.execute(sa_text("SHOW search_path"))
+                search_path = sp.scalar()
+                tables = await conn.execute(sa_text(
+                    "SELECT table_schema, column_name "
+                    "FROM information_schema.columns "
+                    "WHERE table_name = 'users' "
+                    "ORDER BY table_schema, ordinal_position"
+                ))
+                cols = [{"schema": r[0], "col": r[1]} for r in tables.fetchall()]
+                return {"search_path": search_path, "users_columns": cols}
+        except Exception as e:
+            return {"error": str(e)}
+
     return app
 
 
