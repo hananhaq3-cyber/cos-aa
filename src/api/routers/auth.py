@@ -648,15 +648,9 @@ async def oauth_callback(
         details={"provider": provider},
     )
 
-    # Redirect to frontend with token in secure HTTP-only cookie (not URL)
-    response = RedirectResponse(url=f"{frontend_url}/login", status_code=302)
-    response.set_cookie(
-        key="__auth",
-        value=token,
-        max_age=3600,  # 60 minutes (same as token expiry)
-        httponly=True,
-        secure=True,  # HTTPS only in production
-        samesite="lax",
-        path="/",
+    # Redirect to frontend with token as URL parameter
+    # LoginPage extracts token from ?token= and stores in localStorage
+    response = RedirectResponse(
+        url=f"{frontend_url}/login?token={token}", status_code=302
     )
     return response

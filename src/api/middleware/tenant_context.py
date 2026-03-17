@@ -22,6 +22,7 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
         "/api/v1/auth/google",
         "/api/v1/auth/github",
         "/api/v1/auth/apple",
+        "/api/v1/observability/health",
     )
     # Core routes that require email verification (soft block)
     VERIFICATION_REQUIRED_PREFIXES = (
