@@ -15,37 +15,36 @@ from src.db.models.audit import AuditEvent
 from src.db.models.session import UserSession
 
 
-# Raw ALTER TABLE statements using IF NOT EXISTS (PostgreSQL 9.6+)
-_ALTER_STATEMENTS = [
-    "ALTER TABLE users ADD COLUMN IF NOT EXISTS oauth_provider VARCHAR(32)",
-    "ALTER TABLE users ADD COLUMN IF NOT EXISTS oauth_provider_id VARCHAR(256)",
-    "ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT false",
-    "ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMPTZ",
-    "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS goal TEXT",
-]
-
-
 async def init_db():
     """Create all database tables from ORM models and apply missing columns."""
+    # Step 1: Create tables
     try:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
-            print("✅ Tables created/verified")
-
-            # Add missing columns to existing tables
-            for stmt in _ALTER_STATEMENTS:
-                try:
-                    await conn.execute(text(stmt))
-                except Exception as e:
-                    print(f"  ⚠️  ALTER: {e}")
-            print("✅ Missing columns applied")
-
-        print("✅ Database initialized successfully")
-    except ProgrammingError as e:
-        print(f"⚠️  Database initialization warning: {e}")
+        print("✅ Tables created/verified")
     except Exception as e:
-        print(f"❌ Database initialization failed: {e}")
+        print(f"❌ Table creation failed: {e}")
         raise
+
+    # Step 2: Add missing columns in a SEPARATE transaction
+    alter_statements = [
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS oauth_provider VARCHAR(32)",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS oauth_provider_id VARCHAR(256)",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT false",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMPTZ",
+        "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS goal TEXT",
+    ]
+    try:
+        async with engine.begin() as conn:
+            for stmt in alter_statements:
+                print(f"  Running: {stmt[:60]}...")
+                await conn.execute(text(stmt))
+        print("✅ Missing columns applied")
+    except Exception as e:
+        print(f"❌ Column migration failed: {e}")
+        # Don't raise - allow app to start even if ALTER fails
+
+    print("✅ Database initialized successfully")
 
 
 if __name__ == "__main__":
