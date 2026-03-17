@@ -65,7 +65,19 @@ def create_app() -> FastAPI:
         allowed_origins = ["*"]
         allow_origin_regex = None
 
-    app.add_middleware(
+    # ── Custom Middleware ──
+    # Order: last added = outermost. CORS MUST be outermost so ALL
+    # responses (including 401s from TenantContext) get CORS headers.
+    from src.api.middleware.request_logger import RequestLoggerMiddleware
+    from src.api.middleware.rate_limiter import RateLimiterMiddleware
+    from src.api.middleware.tenant_context import TenantContextMiddleware
+    from src.api.middleware.security_headers import SecurityHeadersMiddleware
+
+    app.add_middleware(TenantContextMiddleware)    # innermost
+    app.add_middleware(RateLimiterMiddleware)
+    app.add_middleware(RequestLoggerMiddleware)
+    app.add_middleware(SecurityHeadersMiddleware)
+    app.add_middleware(                            # outermost
         CORSMiddleware,
         allow_origins=allowed_origins if allow_origin_regex is None else [],
         allow_origin_regex=allow_origin_regex,
@@ -73,17 +85,6 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-
-    # ── Custom Middleware (order matters: outermost first) ──
-    from src.api.middleware.request_logger import RequestLoggerMiddleware
-    from src.api.middleware.rate_limiter import RateLimiterMiddleware
-    from src.api.middleware.tenant_context import TenantContextMiddleware
-    from src.api.middleware.security_headers import SecurityHeadersMiddleware
-
-    app.add_middleware(SecurityHeadersMiddleware)
-    app.add_middleware(RequestLoggerMiddleware)
-    app.add_middleware(RateLimiterMiddleware)
-    app.add_middleware(TenantContextMiddleware)
 
     # ── Routers ──
     from src.api.routers import sessions, agents, memory, observability, admin, auth, dashboard
@@ -116,46 +117,6 @@ def create_app() -> FastAPI:
 
         overall = all(checks.values())
         return {"healthy": overall, "checks": checks}
-
-    @app.get("/migrate", tags=["root"])
-    async def run_migration():
-        """One-time migration endpoint to add missing columns."""
-        from sqlalchemy import text as sa_text
-        results = []
-        stmts = [
-            "ALTER TABLE users ADD COLUMN IF NOT EXISTS oauth_provider VARCHAR(32)",
-            "ALTER TABLE users ADD COLUMN IF NOT EXISTS oauth_provider_id VARCHAR(256)",
-            "ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT false",
-            "ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMPTZ",
-            "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS goal TEXT",
-        ]
-        for stmt in stmts:
-            try:
-                async with engine.begin() as conn:
-                    await conn.execute(sa_text(stmt))
-                results.append({"sql": stmt[:50], "status": "ok"})
-            except Exception as e:
-                results.append({"sql": stmt[:50], "status": "error", "error": str(e)[:100]})
-        return {"status": "done", "results": results}
-
-    @app.get("/debug-db", tags=["root"])
-    async def debug_db():
-        """Debug: show users table columns and search_path."""
-        from sqlalchemy import text as sa_text
-        try:
-            async with engine.begin() as conn:
-                sp = await conn.execute(sa_text("SHOW search_path"))
-                search_path = sp.scalar()
-                tables = await conn.execute(sa_text(
-                    "SELECT table_schema, column_name "
-                    "FROM information_schema.columns "
-                    "WHERE table_name = 'users' "
-                    "ORDER BY table_schema, ordinal_position"
-                ))
-                cols = [{"schema": r[0], "col": r[1]} for r in tables.fetchall()]
-                return {"search_path": search_path, "users_columns": cols}
-        except Exception as e:
-            return {"error": str(e)}
 
     return app
 
