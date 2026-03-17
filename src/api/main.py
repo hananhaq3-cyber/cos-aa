@@ -101,9 +101,8 @@ def create_app() -> FastAPI:
     async def root():
         return {
             "service": "COS-AA",
-            "version": "2.1.0",
+            "version": "2.2.0",
             "status": "running",
-            "build": "aa7c6c5-dbfix",
         }
 
     @app.get("/health", tags=["root"])
@@ -117,6 +116,30 @@ def create_app() -> FastAPI:
 
         overall = all(checks.values())
         return {"healthy": overall, "checks": checks}
+
+    @app.get("/migrate", tags=["root"])
+    async def run_migration():
+        """One-time migration endpoint to add missing columns."""
+        from sqlalchemy import text as sa_text
+        results = []
+        stmts = [
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS oauth_provider VARCHAR(32)",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS oauth_provider_id VARCHAR(256)",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT false",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMPTZ",
+            "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS goal TEXT",
+        ]
+        try:
+            async with engine.begin() as conn:
+                for stmt in stmts:
+                    try:
+                        await conn.execute(sa_text(stmt))
+                        results.append({"sql": stmt[:50], "status": "ok"})
+                    except Exception as e:
+                        results.append({"sql": stmt[:50], "status": "error", "error": str(e)})
+        except Exception as e:
+            return {"status": "connection_error", "error": str(e)}
+        return {"status": "done", "results": results}
 
     return app
 
