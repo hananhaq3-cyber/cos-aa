@@ -67,3 +67,17 @@ class ConfirmActionResponse(BaseModel):
     approved: bool
     resumed: bool
     message: str = ""
+
+
+class SessionSummaryResponse(BaseModel):
+    session_id: UUID
+    tenant_id: UUID
+    goal: str = ""
+    status: str = "active"
+    created_at: datetime
+    message_count: int = 0
+
+
+class SessionListResponse(BaseModel):
+    sessions: list[SessionSummaryResponse] = []
+    total: int = 0

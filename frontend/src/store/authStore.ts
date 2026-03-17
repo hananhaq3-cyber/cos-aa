@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { User } from "../types/auth";
+import { logout as apiLogout } from "../api/auth";
 
 const TOKEN_KEY = "cos_aa_token";
 
@@ -9,7 +10,7 @@ interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (token: string) => void;
-  logout: () => void;
+  logout: () => Promise<void>;
   hydrate: () => void;
 }
 
@@ -27,10 +28,16 @@ function parseJwtPayload(token: string): User | null {
       tenant_id: payload.tenant_id,
       email: payload.email ?? "",
       role: payload.role,
+      email_verified: payload.email_verified ?? false,
     };
   } catch {
     return null;
   }
+}
+
+function clearLocalState(set: (state: Partial<AuthState>) => void) {
+  localStorage.removeItem(TOKEN_KEY);
+  set({ token: null, user: null, isAuthenticated: false, isLoading: false });
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -45,9 +52,13 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ token, user, isAuthenticated: !!user, isLoading: false });
   },
 
-  logout: () => {
-    localStorage.removeItem(TOKEN_KEY);
-    set({ token: null, user: null, isAuthenticated: false, isLoading: false });
+  logout: async () => {
+    try {
+      await apiLogout();
+    } catch {
+      // Still log out locally even if API call fails
+    }
+    clearLocalState(set);
   },
 
   hydrate: () => {

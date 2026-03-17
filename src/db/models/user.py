@@ -1,8 +1,8 @@
-"""User ORM model — maps to the ``users`` table from migration 001 + 005."""
+"""User ORM model — maps to the ``users`` table from migration 001 + 005 + 007."""
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, String, Text, UniqueConstraint, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -24,6 +24,12 @@ class User(Base):
     role: Mapped[str] = mapped_column(String(32), nullable=False, server_default="end_user")
     oauth_provider: Mapped[str | None] = mapped_column(String(32), nullable=True)
     oauth_provider_id: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    email_verified: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false"
+    )
+    email_verified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

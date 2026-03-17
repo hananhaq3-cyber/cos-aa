@@ -32,11 +32,17 @@ async def lifespan(app: FastAPI):
 
 
 def create_app() -> FastAPI:
+    # Hide Swagger docs in production
+    docs_url = None if settings.app_env == "production" else "/docs"
+    redoc_url = None if settings.app_env == "production" else "/redoc"
+
     app = FastAPI(
         title="COS-AA — Cognitive Operating System for AI Agents",
         version="2.0.0",
         description="Multi-tenant AI platform with OODA loops and CoT reasoning.",
         lifespan=lifespan,
+        docs_url=docs_url,
+        redoc_url=redoc_url,
     )
 
     # ── CORS ──
@@ -72,15 +78,18 @@ def create_app() -> FastAPI:
     from src.api.middleware.request_logger import RequestLoggerMiddleware
     from src.api.middleware.rate_limiter import RateLimiterMiddleware
     from src.api.middleware.tenant_context import TenantContextMiddleware
+    from src.api.middleware.security_headers import SecurityHeadersMiddleware
 
+    app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(RequestLoggerMiddleware)
     app.add_middleware(RateLimiterMiddleware)
     app.add_middleware(TenantContextMiddleware)
 
     # ── Routers ──
-    from src.api.routers import sessions, agents, memory, observability, admin, auth
+    from src.api.routers import sessions, agents, memory, observability, admin, auth, dashboard
 
     app.include_router(auth.router)
+    app.include_router(dashboard.router)
     app.include_router(sessions.router)
     app.include_router(agents.router)
     app.include_router(memory.router)

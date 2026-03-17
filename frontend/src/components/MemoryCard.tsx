@@ -1,11 +1,14 @@
 /**
- * Memory fragment card for search results.
+ * Memory fragment card for search results and browse list.
  */
 import clsx from "clsx";
+import { Trash2 } from "lucide-react";
 import type { MemoryFragment } from "../types";
 
 interface MemoryCardProps {
   fragment: MemoryFragment;
+  onDelete?: (id: string) => void;
+  deleting?: boolean;
 }
 
 const tierColors: Record<string, string> = {
@@ -13,9 +16,10 @@ const tierColors: Record<string, string> = {
   EPISODIC: "border-blue-500/40 bg-blue-500/5",
   PROCEDURAL: "border-green-500/40 bg-green-500/5",
   WORKING: "border-yellow-500/40 bg-yellow-500/5",
+  manual: "border-cyan-500/40 bg-cyan-500/5",
 };
 
-export default function MemoryCard({ fragment }: MemoryCardProps) {
+export default function MemoryCard({ fragment, onDelete, deleting }: MemoryCardProps) {
   const borderClass =
     tierColors[fragment.tier] || "border-gray-700 bg-gray-900";
 
@@ -30,9 +34,21 @@ export default function MemoryCard({ fragment }: MemoryCardProps) {
         <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">
           {fragment.tier}
         </span>
-        <span className="text-xs text-gray-500">
-          score: {fragment.relevance_score.toFixed(3)}
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-gray-500">
+            score: {fragment.relevance_score.toFixed(3)}
+          </span>
+          {onDelete && (
+            <button
+              onClick={() => onDelete(fragment.fragment_id)}
+              disabled={deleting}
+              className="p-1 text-gray-500 hover:text-red-400 disabled:opacity-50 transition-colors"
+              title="Delete memory"
+            >
+              <Trash2 size={14} />
+            </button>
+          )}
+        </div>
       </div>
       <p className="text-sm text-gray-200 leading-relaxed mb-2">
         {fragment.content.length > 300
@@ -51,8 +67,13 @@ export default function MemoryCard({ fragment }: MemoryCardProps) {
           ))}
         </div>
       )}
+      {fragment.created_at && (
+        <p className="text-xs text-gray-500 mt-2">
+          {new Date(fragment.created_at).toLocaleString()}
+        </p>
+      )}
       {fragment.summary && (
-        <p className="text-xs text-gray-500 mt-2 italic">{fragment.summary}</p>
+        <p className="text-xs text-gray-500 mt-1 italic">{fragment.summary}</p>
       )}
     </div>
   );

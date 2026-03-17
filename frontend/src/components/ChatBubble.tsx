@@ -22,7 +22,7 @@ export default function ChatBubble({
     >
       <div
         className={clsx(
-          "max-w-[70%] rounded-2xl px-4 py-3 text-sm leading-relaxed",
+          "max-w-[85%] sm:max-w-[70%] rounded-2xl px-4 py-3 text-sm leading-relaxed",
           isUser
             ? "bg-primary-600 text-white rounded-br-md"
             : "bg-gray-800 text-gray-200 rounded-bl-md"

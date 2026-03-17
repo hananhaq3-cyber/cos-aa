@@ -12,6 +12,7 @@ const api = axios.create({
   baseURL,
   headers: { "Content-Type": "application/json" },
   timeout: 120_000,
+  withCredentials: true,  // Include cookies with CORS requests
 });
 
 // Attach JWT token from localStorage on every request

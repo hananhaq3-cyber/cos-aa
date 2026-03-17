@@ -6,10 +6,10 @@ from __future__ import annotations
 
 import time
 from typing import Any, ClassVar
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from src.agents.base_agent import BaseAgent
-from src.core.domain_objects import AgentType, ExecutionContext
+from src.core.domain_objects import AgentType
 from src.core.message_schemas import TaskDispatchPayload, TaskResultPayload
 from src.llm.embeddings import get_llm_client
 from src.memory.memory_service import memory_service
@@ -66,12 +66,11 @@ class PlanningAgent(BaseAgent):
             )
 
             # Retrieve relevant procedural patterns from memory
-            patterns = []
+            pattern = None
             try:
-                patterns = await memory_service.procedural.find_best_pattern(
-                    tenant_id=tenant_id,
+                pattern = await memory_service.find_pattern(
+                    tenant_id=UUID(tenant_id) if isinstance(tenant_id, str) else tenant_id,
                     task_type="plan_generation",
-                    context_tags=[],
                 )
             except Exception:
                 pass
@@ -80,13 +79,17 @@ class PlanningAgent(BaseAgent):
 
 Context: {context_data}
 
-Previous successful patterns: {patterns if patterns else 'None available'}
+Previous successful patterns: {pattern if pattern else 'None available'}
 
 Generate a detailed execution plan to achieve this goal."""
 
+            messages = [
+                {"role": "system", "content": PLANNING_SYSTEM_PROMPT},
+                {"role": "user", "content": user_prompt},
+            ]
+
             llm_response = await self._llm.chat_completion_json(
-                system_prompt=PLANNING_SYSTEM_PROMPT,
-                user_prompt=user_prompt,
+                messages=messages,
                 temperature=0.3,
             )
 
@@ -94,9 +97,8 @@ Generate a detailed execution plan to achieve this goal."""
             return TaskResultPayload(
                 task_id=task.task_id,
                 success=True,
-                output=llm_response.content,
+                output=llm_response,
                 duration_ms=elapsed,
-                tokens_consumed=llm_response.usage.get("total_tokens", 0),
             )
         except Exception as e:
             elapsed = (time.perf_counter() - start) * 1000

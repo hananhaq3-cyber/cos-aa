@@ -56,6 +56,11 @@ class Settings(BaseSettings):
     apple_key_id: str = ""
     oauth_redirect_base_url: str = "http://localhost:5173"
 
+    # --- Email (Resend) ---
+    resend_api_key: str = ""
+    email_from: str = "COS-AA <onboarding@resend.dev>"
+    frontend_url: str = "https://cos-aa.vercel.app"
+
     # --- Vault ---
     vault_addr: str = ""
     vault_role: str = ""

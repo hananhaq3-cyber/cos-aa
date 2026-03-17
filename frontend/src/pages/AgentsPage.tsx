@@ -32,7 +32,7 @@ export default function AgentsPage() {
   });
 
   return (
-    <div className="p-6">
+    <div className="p-4 sm:p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-lg font-semibold">Agent Dashboard</h1>
@@ -49,7 +49,7 @@ export default function AgentsPage() {
       </div>
 
       {/* Status filter tabs */}
-      <div className="flex gap-1 mb-6">
+      <div className="flex flex-wrap gap-1 mb-6">
         {STATUS_FILTERS.map((s) => (
           <button
             key={s}

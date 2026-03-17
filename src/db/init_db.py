@@ -9,6 +9,8 @@ from src.db.postgres import engine, Base
 # Import models so they're registered with Base.metadata
 from src.db.models.user import User
 from src.db.models.tenant import Tenant
+from src.db.models.audit import AuditEvent
+from src.db.models.session import UserSession
 
 
 async def init_db():

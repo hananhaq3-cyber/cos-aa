@@ -38,3 +38,15 @@ class QuotaItem(BaseModel):
 
 class QuotaListResponse(BaseModel):
     quotas: list[QuotaItem] = []
+
+
+class TenantUserResponse(BaseModel):
+    user_id: UUID
+    email: str
+    role: str
+    created_at: datetime
+
+
+class TenantUsersListResponse(BaseModel):
+    users: list[TenantUserResponse] = []
+    total: int = 0

@@ -77,10 +77,11 @@ class LearningAgent(BaseAgent):
             # Retrieve recent episodic memories for analysis
             recent_episodes = []
             try:
-                recent_episodes = await memory_service.episodic.query_recent(
-                    tenant_id=tenant_id,
-                    session_id=str(session_id),
+                tid = UUID(tenant_id) if isinstance(tenant_id, str) else tenant_id
+                recent_episodes = await memory_service.query_episodic(
+                    tenant_id=tid,
                     limit=20,
+                    session_id=session_id,
                 )
             except Exception:
                 pass
@@ -104,24 +105,28 @@ Additional context: {task.input_data.get('context', {})}
 
 Analyze these episodes and extract insights, preference updates, and procedural patterns."""
 
+            messages = [
+                {"role": "system", "content": LEARNING_SYSTEM_PROMPT},
+                {"role": "user", "content": user_prompt},
+            ]
+
             llm_response = await self._llm.chat_completion_json(
-                system_prompt=LEARNING_SYSTEM_PROMPT,
-                user_prompt=user_prompt,
+                messages=messages,
                 temperature=0.4,
             )
 
             # Store learned patterns back to procedural memory
-            if isinstance(llm_response.content, dict):
-                patterns = llm_response.content.get("procedural_patterns", [])
+            if isinstance(llm_response, dict):
+                patterns = llm_response.get("procedural_patterns", [])
                 for pattern in patterns:
                     try:
-                        await memory_service.procedural.store_pattern(
-                            tenant_id=tenant_id,
+                        tid = UUID(tenant_id) if isinstance(tenant_id, str) else tenant_id
+                        await memory_service.store_pattern(
+                            tenant_id=tid,
+                            pattern_name=pattern.get("task_type", "general"),
                             task_type=pattern.get("task_type", "general"),
-                            strategy_description=pattern.get("strategy", ""),
-                            context_tags=pattern.get(
-                                "success_indicators", []
-                            ),
+                            trigger_conditions={"indicators": pattern.get("success_indicators", [])},
+                            action_sequence=[{"strategy": pattern.get("strategy", "")}],
                         )
                     except Exception:
                         pass
@@ -130,9 +135,8 @@ Analyze these episodes and extract insights, preference updates, and procedural 
             return TaskResultPayload(
                 task_id=task.task_id,
                 success=True,
-                output=llm_response.content,
+                output=llm_response,
                 duration_ms=elapsed,
-                tokens_consumed=llm_response.usage.get("total_tokens", 0),
             )
         except Exception as e:
             elapsed = (time.perf_counter() - start) * 1000

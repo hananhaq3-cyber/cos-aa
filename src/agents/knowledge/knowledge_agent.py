@@ -80,17 +80,17 @@ class KnowledgeAgent(BaseAgent):
             # 1. Search semantic memory
             try:
                 memory_results = await memory_service.retrieve_context(
-                    tenant_id=tenant_id,
-                    session_id=str(task.session_id),
+                    tenant_id=UUID(tenant_id) if isinstance(tenant_id, str) else tenant_id,
                     query=query,
+                    session_id=task.session_id,
                     top_k=5,
                 )
-                for mem in memory_results.get("semantic", []):
+                for mem in memory_results:
                     gathered_sources.append(
                         {
                             "type": "memory",
-                            "content": mem.get("content", ""),
-                            "relevance": mem.get("relevance_score", 0.0),
+                            "content": mem.summary if hasattr(mem, "summary") else str(mem),
+                            "relevance": mem.relevance_score if hasattr(mem, "relevance_score") else 0.0,
                         }
                     )
             except Exception:
@@ -137,9 +137,13 @@ Gathered sources ({len(gathered_sources)} total):
 
 Synthesize an answer from these sources."""
 
+            messages = [
+                {"role": "system", "content": KNOWLEDGE_SYSTEM_PROMPT},
+                {"role": "user", "content": user_prompt},
+            ]
+
             llm_response = await self._llm.chat_completion_json(
-                system_prompt=KNOWLEDGE_SYSTEM_PROMPT,
-                user_prompt=user_prompt,
+                messages=messages,
                 temperature=0.2,
             )
 
@@ -147,9 +151,8 @@ Synthesize an answer from these sources."""
             return TaskResultPayload(
                 task_id=task.task_id,
                 success=True,
-                output=llm_response.content,
+                output=llm_response,
                 duration_ms=elapsed,
-                tokens_consumed=llm_response.usage.get("total_tokens", 0),
                 tool_calls_made=len(gathered_sources),
             )
         except Exception as e:

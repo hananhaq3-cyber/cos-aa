@@ -1,7 +1,8 @@
 /**
  * Agent card for the agents dashboard.
  */
-import { Bot, Check, X } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Bot, Check, X, ChevronRight } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
 import type { AgentType } from "../types";
@@ -22,6 +23,7 @@ const statusColors: Record<string, string> = {
 
 export default function AgentCard({ agent }: AgentCardProps) {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const colorClass =
     statusColors[agent.status] ||
     "bg-gray-500/20 text-gray-400 border-gray-500/30";
@@ -37,7 +39,10 @@ export default function AgentCard({ agent }: AgentCardProps) {
   });
 
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 hover:border-gray-700 transition-colors">
+    <div
+      className="bg-gray-900 border border-gray-800 rounded-xl p-5 hover:border-gray-700 transition-colors cursor-pointer"
+      onClick={() => navigate(`/agents/${agent.definition_id}`)}
+    >
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-primary-600/20 rounded-lg">
@@ -70,7 +75,7 @@ export default function AgentCard({ agent }: AgentCardProps) {
       {agent.status === "VALIDATING" && (
         <div className="flex gap-2 mt-3 pt-3 border-t border-gray-800">
           <button
-            onClick={() => approveMutation.mutate()}
+            onClick={(e) => { e.stopPropagation(); approveMutation.mutate(); }}
             disabled={approveMutation.isPending}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600/20 text-green-400 hover:bg-green-600/30 text-xs rounded-lg transition-colors"
           >
@@ -78,7 +83,7 @@ export default function AgentCard({ agent }: AgentCardProps) {
             {approveMutation.isPending ? "..." : "Approve"}
           </button>
           <button
-            onClick={() => rejectMutation.mutate()}
+            onClick={(e) => { e.stopPropagation(); rejectMutation.mutate(); }}
             disabled={rejectMutation.isPending}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600/20 text-red-400 hover:bg-red-600/30 text-xs rounded-lg transition-colors"
           >
@@ -87,6 +92,11 @@ export default function AgentCard({ agent }: AgentCardProps) {
           </button>
         </div>
       )}
+      <div className="flex items-center justify-end mt-3 pt-3 border-t border-gray-800">
+        <span className="flex items-center gap-1 text-xs text-gray-500 hover:text-primary-400 transition-colors">
+          View Details <ChevronRight size={12} />
+        </span>
+      </div>
     </div>
   );
 }

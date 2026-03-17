@@ -1,5 +1,10 @@
 import api from "./client";
-import type { AuthResponse, LoginRequest, RegisterRequest } from "../types/auth";
+import type {
+  AuthResponse,
+  LoginRequest,
+  RegisterRequest,
+  SessionInfo,
+} from "../types/auth";
 
 export async function loginWithCredentials(
   data: LoginRequest
@@ -15,6 +20,39 @@ export async function register(
   return res.data;
 }
 
+export async function logout(): Promise<void> {
+  await api.post("/auth/logout");
+}
+
+export async function getSessions(): Promise<SessionInfo[]> {
+  const res = await api.get<SessionInfo[]>("/auth/sessions");
+  return res.data;
+}
+
+export async function revokeSession(jti: string): Promise<void> {
+  await api.post(`/auth/sessions/${jti}/revoke`);
+}
+
+export async function revokeAllSessions(): Promise<void> {
+  await api.post("/auth/sessions/revoke-all");
+}
+
 export function getOAuthUrl(provider: "google" | "github" | "apple"): string {
-  return `/api/v1/auth/${provider}`;
+  const baseUrl = import.meta.env.VITE_API_URL || "";
+  return `${baseUrl}/api/v1/auth/${provider}`;
+}
+
+export async function verifyEmail(token: string): Promise<{ message: string }> {
+  const res = await api.get<{ message: string }>(`/auth/verify-email?token=${encodeURIComponent(token)}`);
+  return res.data;
+}
+
+export async function resendVerification(): Promise<{ message: string }> {
+  const res = await api.post<{ message: string }>("/auth/resend-verification");
+  return res.data;
+}
+
+export async function getMe(): Promise<AuthResponse> {
+  const res = await api.get<AuthResponse>("/auth/me");
+  return res.data;
 }

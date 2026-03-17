@@ -14,7 +14,9 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from src.api.auth.oauth2 import get_current_user
 from src.api.auth.rbac import require_permission
 from src.api.schemas.agent_schemas import (
+    AgentDetailResponse,
     AgentListResponse,
+    AgentStatsResponse,
     AgentTypeResponse,
     SpawnAgentRequest,
     SpawnAgentResponse,
@@ -53,11 +55,54 @@ async def list_agents(
     )
 
 
+@router.get("/stats", response_model=AgentStatsResponse)
+async def get_agent_stats(
+    request: Request,
+    user: dict = Depends(get_current_user),
+) -> AgentStatsResponse:
+    """Get agent counts grouped by status."""
+    tenant_id: UUID = request.state.tenant_id
+    types = await agent_registry.list_types(tenant_id)
+    by_status: dict[str, int] = {}
+    for t in types:
+        s = t.status.value
+        by_status[s] = by_status.get(s, 0) + 1
+    return AgentStatsResponse(total=len(types), by_status=by_status)
+
+
+@router.get("/{definition_id}", response_model=AgentDetailResponse)
+async def get_agent_detail(
+    definition_id: UUID,
+    request: Request,
+    user: dict = Depends(get_current_user),
+) -> AgentDetailResponse:
+    """Get full detail for a single agent definition."""
+    tenant_id: UUID = request.state.tenant_id
+    definition = await agent_registry.get_type(tenant_id, definition_id)
+    if definition is None:
+        raise HTTPException(status_code=404, detail="Agent definition not found")
+
+    return AgentDetailResponse(
+        definition_id=definition.definition_id,
+        agent_type_name=definition.agent_type_name,
+        purpose=definition.purpose,
+        status=definition.status.value,
+        system_prompt=definition.system_prompt,
+        model_override=definition.model_override,
+        trigger_conditions=definition.trigger_conditions,
+        tools=[t.model_dump() for t in definition.tools],
+        memory_access=definition.memory_access.model_dump(),
+        resource_limits=definition.resource_limits.model_dump(),
+        created_by=definition.created_by,
+        created_at=definition.created_at,
+    )
+
+
 @router.post("/spawn", response_model=SpawnAgentResponse)
 async def spawn_agent(
     body: SpawnAgentRequest,
     request: Request,
-    user: dict = Depends(require_permission("agents:spawn")),
+    user: dict = Depends(require_permission("agent:spawn")),
 ) -> SpawnAgentResponse:
     """Spawn a new agent type from a capability gap description."""
     tenant_id: UUID = request.state.tenant_id
@@ -108,7 +153,7 @@ async def spawn_agent(
 async def approve_agent(
     definition_id: UUID,
     request: Request,
-    user: dict = Depends(require_permission("agents:approve")),
+    user: dict = Depends(require_permission("agent:approve")),
 ) -> AgentTypeResponse:
     """Approve a VALIDATING agent definition, transitioning it to ACTIVE."""
     tenant_id: UUID = request.state.tenant_id
@@ -143,7 +188,7 @@ async def approve_agent(
 async def reject_agent(
     definition_id: UUID,
     request: Request,
-    user: dict = Depends(require_permission("agents:approve")),
+    user: dict = Depends(require_permission("agent:approve")),
 ) -> AgentTypeResponse:
     """Reject a VALIDATING agent definition."""
     tenant_id: UUID = request.state.tenant_id

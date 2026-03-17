@@ -1,9 +1,9 @@
 """
 JWT token creation and validation.
-Claims include: sub (user_id), tenant_id, role, scopes.
+Claims include: sub (user_id), tenant_id, role, scopes, jti (JWT ID for revocation).
 """
 from datetime import datetime, timedelta, timezone
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from jose import JWTError, jwt
 from pydantic import BaseModel
@@ -19,6 +19,9 @@ class TokenClaims(BaseModel):
     tenant_id: UUID
     role: str
     scopes: list[str] = []
+    jti: str  # JWT ID for token revocation
+    email: str = ""
+    email_verified: bool = False
     exp: datetime
     iat: datetime
 
@@ -28,6 +31,8 @@ def create_access_token(
     tenant_id: UUID,
     role: str,
     scopes: list[str] | None = None,
+    email: str = "",
+    email_verified: bool = False,
 ) -> str:
     now = datetime.now(timezone.utc)
     claims = {
@@ -35,6 +40,9 @@ def create_access_token(
         "tenant_id": str(tenant_id),
         "role": role,
         "scopes": scopes or [],
+        "jti": str(uuid4()),  # Unique token ID for revocation
+        "email": email,
+        "email_verified": email_verified,
         "iat": now,
         "exp": now + timedelta(minutes=settings.jwt_expire_minutes),
     }
@@ -55,6 +63,9 @@ def decode_access_token(token: str) -> TokenClaims:
             tenant_id=UUID(payload["tenant_id"]),
             role=payload["role"],
             scopes=payload.get("scopes", []),
+            jti=payload.get("jti", ""),
+            email=payload.get("email", ""),
+            email_verified=payload.get("email_verified", False),
             exp=datetime.fromtimestamp(payload["exp"], tz=timezone.utc),
             iat=datetime.fromtimestamp(payload["iat"], tz=timezone.utc),
         )

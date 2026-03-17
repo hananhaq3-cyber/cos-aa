@@ -127,12 +127,14 @@ class ActPhase:
             },
         )
 
-        task_id = task_dispatcher.dispatch_task(
-            tenant_id, step.agent_type, payload, trace_id=trace_id
+        task_id = await asyncio.to_thread(
+            task_dispatcher.dispatch_task,
+            tenant_id, step.agent_type, payload, trace_id=trace_id,
         )
 
-        result = task_dispatcher.get_result(
-            task_id, timeout=step.timeout_seconds
+        result = await asyncio.to_thread(
+            task_dispatcher.get_result,
+            task_id, step.timeout_seconds,
         )
         duration = (time.perf_counter() - start) * 1000
 

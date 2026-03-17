@@ -39,6 +39,26 @@ class AgentInstanceResponse(BaseModel):
     max_concurrent_tasks: int = 5
 
 
+class AgentDetailResponse(BaseModel):
+    definition_id: UUID
+    agent_type_name: str
+    purpose: str
+    status: str
+    system_prompt: str = ""
+    model_override: str | None = None
+    trigger_conditions: list[str] = []
+    tools: list[dict[str, Any]] = []
+    memory_access: dict[str, bool] = {}
+    resource_limits: dict[str, int] = {}
+    created_by: str = ""
+    created_at: datetime | None = None
+
+
+class AgentStatsResponse(BaseModel):
+    total: int = 0
+    by_status: dict[str, int] = {}
+
+
 class AgentListResponse(BaseModel):
     agent_types: list[AgentTypeResponse] = []
     total: int = 0

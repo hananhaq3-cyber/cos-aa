@@ -47,7 +47,7 @@ export default function AuthCard() {
     "w-full rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-3 text-sm text-white placeholder-gray-500 outline-none transition-all duration-300 focus:border-blue-500/50 focus:bg-white/[0.05] focus:ring-1 focus:ring-blue-500/30 focus:shadow-lg focus:shadow-blue-500/5";
 
   return (
-    <div className="w-full max-w-[420px] rounded-3xl border border-white/[0.08] bg-gradient-to-b from-white/[0.06] to-white/[0.02] p-9 backdrop-blur-2xl shadow-[0_32px_64px_rgba(0,0,0,0.5)]">
+    <div className="w-full max-w-[420px] rounded-3xl border border-white/[0.08] bg-gradient-to-b from-white/[0.06] to-white/[0.02] p-6 sm:p-9 backdrop-blur-2xl shadow-[0_32px_64px_rgba(0,0,0,0.5)]">
       {/* Logo */}
       <div className="mb-10">
         <CosAALogo />

@@ -1,13 +1,42 @@
-import { useRef, useMemo, useCallback } from "react";
+import { useRef, useMemo, useCallback, useEffect, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 
-const NEURON_COUNT = 220;
+const DESKTOP_NEURONS = 220;
+const MOBILE_NEURONS = 80;
 const CONNECTION_DISTANCE = 2.4;
 const PULSE_SPEED = 0.8;
 
+function useIsMobile() {
+  const [mobile, setMobile] = useState(
+    () => typeof window !== "undefined" && window.innerWidth < 768
+  );
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 767px)");
+    const handler = (e: MediaQueryListEvent) => setMobile(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
+  return mobile;
+}
+
+function usePrefersReducedMotion() {
+  const [reduced, setReduced] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  );
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const handler = (e: MediaQueryListEvent) => setReduced(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
+  return reduced;
+}
+
 /** Glowing neuron particles + dynamic connections + mouse-reactive drift */
-function NeuralNetwork() {
+function NeuralNetwork({ neuronCount }: { neuronCount: number }) {
   const pointsRef = useRef<THREE.Points>(null);
   const linesRef = useRef<THREE.LineSegments>(null);
   const glowRef = useRef<THREE.Points>(null);
@@ -15,10 +44,10 @@ function NeuralNetwork() {
   const { pointer } = useThree();
 
   const { positions, velocities, sizes } = useMemo(() => {
-    const pos = new Float32Array(NEURON_COUNT * 3);
-    const vel = new Float32Array(NEURON_COUNT * 3);
-    const sz = new Float32Array(NEURON_COUNT);
-    for (let i = 0; i < NEURON_COUNT; i++) {
+    const pos = new Float32Array(neuronCount * 3);
+    const vel = new Float32Array(neuronCount * 3);
+    const sz = new Float32Array(neuronCount);
+    for (let i = 0; i < neuronCount; i++) {
       pos[i * 3] = (Math.random() - 0.5) * 12;
       pos[i * 3 + 1] = (Math.random() - 0.5) * 12;
       pos[i * 3 + 2] = (Math.random() - 0.5) * 12;
@@ -28,17 +57,17 @@ function NeuralNetwork() {
       sz[i] = 0.04 + Math.random() * 0.06;
     }
     return { positions: pos, velocities: vel, sizes: sz };
-  }, []);
+  }, [neuronCount]);
 
   const glowPositions = useMemo(() => new Float32Array(positions), [positions]);
 
   const linePositions = useMemo(
-    () => new Float32Array(NEURON_COUNT * NEURON_COUNT * 6),
-    []
+    () => new Float32Array(neuronCount * neuronCount * 6),
+    [neuronCount]
   );
   const lineColors = useMemo(
-    () => new Float32Array(NEURON_COUNT * NEURON_COUNT * 6),
-    []
+    () => new Float32Array(neuronCount * neuronCount * 6),
+    [neuronCount]
   );
 
   useFrame(({ clock }) => {
@@ -53,7 +82,7 @@ function NeuralNetwork() {
     const szArr = sizeAttr.array as Float32Array;
 
     // Move neurons + pulse sizes
-    for (let i = 0; i < NEURON_COUNT; i++) {
+    for (let i = 0; i < neuronCount; i++) {
       arr[i * 3] += velocities[i * 3];
       arr[i * 3 + 1] += velocities[i * 3 + 1];
       arr[i * 3 + 2] += velocities[i * 3 + 2];
@@ -79,8 +108,8 @@ function NeuralNetwork() {
     // Build connections with distance-based brightness
     let lineIdx = 0;
     let colorIdx = 0;
-    for (let i = 0; i < NEURON_COUNT; i++) {
-      for (let j = i + 1; j < NEURON_COUNT; j++) {
+    for (let i = 0; i < neuronCount; i++) {
+      for (let j = i + 1; j < neuronCount; j++) {
         const dx = arr[i * 3] - arr[j * 3];
         const dy = arr[i * 3 + 1] - arr[j * 3 + 1];
         const dz = arr[i * 3 + 2] - arr[j * 3 + 2];
@@ -164,13 +193,13 @@ function NeuralNetwork() {
           <bufferAttribute
             attach="attributes-position"
             array={positions}
-            count={NEURON_COUNT}
+            count={neuronCount}
             itemSize={3}
           />
           <bufferAttribute
             attach="attributes-size"
             array={sizes}
-            count={NEURON_COUNT}
+            count={neuronCount}
             itemSize={1}
           />
         </bufferGeometry>
@@ -183,7 +212,7 @@ function NeuralNetwork() {
           <bufferAttribute
             attach="attributes-position"
             array={glowPositions}
-            count={NEURON_COUNT}
+            count={neuronCount}
             itemSize={3}
           />
         </bufferGeometry>
@@ -251,19 +280,37 @@ function AmbientOrbs() {
   );
 }
 
+/** Static fallback for reduced-motion users */
+function StaticBackground() {
+  return (
+    <div className="fixed inset-0 -z-10 bg-gray-950">
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(59,130,246,0.08)_0%,transparent_70%)]" />
+    </div>
+  );
+}
+
 export default function NeuralBackground() {
+  const isMobile = useIsMobile();
+  const prefersReduced = usePrefersReducedMotion();
+
   const handleCreated = useCallback(({ gl }: { gl: THREE.WebGLRenderer }) => {
     gl.setClearColor("#030712", 1);
   }, []);
 
+  // Show static gradient for reduced-motion preference
+  if (prefersReduced) return <StaticBackground />;
+
+  const neuronCount = isMobile ? MOBILE_NEURONS : DESKTOP_NEURONS;
+  const maxDpr: [number, number] = isMobile ? [1, 1] : [1, 1.5];
+
   return (
     <div className="fixed inset-0 -z-10">
       <Canvas
-        dpr={[1, 1.5]}
+        dpr={maxDpr}
         camera={{ position: [0, 0, 8], fov: 55 }}
         onCreated={handleCreated}
       >
-        <NeuralNetwork />
+        <NeuralNetwork neuronCount={neuronCount} />
         <AmbientOrbs />
       </Canvas>
     </div>

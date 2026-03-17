@@ -6,18 +6,22 @@ import logging
 import time
 from uuid import UUID, uuid4
 
+from sqlalchemy import text
+
 from src.core.config import settings
 from src.core.domain_objects import (
     CycleResult,
     GoalObject,
     OODAPhase,
     ObservationSet,
+    SituationModel,
 )
 from src.core.exceptions import (
     HumanConfirmationRequired,
     MaxIterationsExceededError,
     OODATimeoutError,
 )
+from src.db.postgres import async_session_factory
 from src.hub.hub_state import CycleState, hub_state_manager
 from src.hub.leader_election import leader_election
 from src.hub.observe import observe_phase
@@ -124,6 +128,15 @@ class OODAEngine:
                 prior_outcomes=prior_outcomes,
             )
 
+            # Log CoT reasoning to audit table
+            await self._log_cot_audit(
+                tenant_id=tenant_id,
+                session_id=session_id,
+                trace_id=state.trace_id,
+                cycle_number=iteration,
+                situation=situation,
+            )
+
             # -- DECIDE --
             await hub_state_manager.transition(state, OODAPhase.DECIDING)
             await pubsub_manager.publish_ooda_progress(
@@ -207,6 +220,51 @@ class OODAEngine:
             return prior_outcomes[-1]
 
         raise MaxIterationsExceededError(str(state.cycle_id), max_iter)
+
+    async def _log_cot_audit(
+        self,
+        tenant_id: UUID,
+        session_id: UUID,
+        trace_id: UUID,
+        cycle_number: int,
+        situation: SituationModel,
+    ) -> None:
+        """Write CoT reasoning chain to the cot_audit_log table."""
+        try:
+            import orjson
+            cot_chain = [
+                {"step_number": s.step_number, "step_name": s.step_name, "reasoning": s.reasoning}
+                for s in situation.cot_chain
+            ] if situation.cot_chain else []
+
+            async with async_session_factory() as session:
+                await session.execute(
+                    text(
+                        "SET LOCAL app.tenant_id = :tid"
+                    ),
+                    {"tid": str(tenant_id)},
+                )
+                await session.execute(
+                    text("""
+                        INSERT INTO cot_audit_log
+                            (tenant_id, session_id, trace_id, cycle_number,
+                             cot_chain, situation_summary, recommended_option, confidence)
+                        VALUES (:tid, :sid, :trace, :cycle, :chain::jsonb, :summary, :rec, :conf)
+                    """),
+                    {
+                        "tid": str(tenant_id),
+                        "sid": str(session_id),
+                        "trace": str(trace_id),
+                        "cycle": cycle_number,
+                        "chain": orjson.dumps(cot_chain).decode(),
+                        "summary": situation.situation_summary,
+                        "rec": situation.recommended_option,
+                        "conf": situation.confidence,
+                    },
+                )
+                await session.commit()
+        except Exception as e:
+            logger.warning("Failed to write CoT audit log: %s", e)
 
 
 ooda_engine = OODAEngine()
