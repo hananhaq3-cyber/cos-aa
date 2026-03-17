@@ -504,7 +504,7 @@ async def oauth_callback(
         raise HTTPException(status_code=400, detail=f"Unsupported provider: {provider}")
 
     ip, user_agent = _get_client_info(request)
-    frontend_url = settings.oauth_redirect_base_url or ""
+    frontend_url = settings.frontend_url or "https://cos-aa.vercel.app"
 
     # Rate limit by IP for callback (more lenient than redirect endpoint)
     allowed, remaining = await _check_oauth_rate_limit(ip, limit_per_minute=10)

@@ -54,7 +54,7 @@ class Settings(BaseSettings):
     apple_client_secret: str = ""
     apple_team_id: str = ""
     apple_key_id: str = ""
-    oauth_redirect_base_url: str = "http://localhost:5173"
+    oauth_redirect_base_url: str = "http://localhost:8000"  # Backend URL for OAuth callbacks
 
     # --- Email (Resend) ---
     resend_api_key: str = ""
