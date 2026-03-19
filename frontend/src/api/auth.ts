@@ -52,6 +52,14 @@ export async function resendVerification(): Promise<{ message: string }> {
   return res.data;
 }
 
+export async function verifyOAuthCode(sessionId: string, code: string): Promise<AuthResponse> {
+  const res = await api.post<AuthResponse>("/auth/oauth-verify", {
+    session_id: sessionId,
+    code: code,
+  });
+  return res.data;
+}
+
 export async function getMe(): Promise<AuthResponse> {
   const res = await api.get<AuthResponse>("/auth/me");
   return res.data;

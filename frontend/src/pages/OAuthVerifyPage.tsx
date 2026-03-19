@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, lazy, Suspense } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { CheckCircle, XCircle, Loader2, Mail, ArrowLeft } from "lucide-react";
 import { useAuthStore } from "../store/authStore";
+import { verifyOAuthCode } from "../api/auth";
 
 const NeuralBackground = lazy(
   () => import("../components/login/NeuralBackground")
@@ -53,32 +54,22 @@ export default function OAuthVerifyPage() {
     setError("");
 
     try {
-      const response = await fetch("/api/v1/auth/oauth-verify", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          session_id: sessionId,
-          code: code,
-        }),
-      });
+      const data = await verifyOAuthCode(sessionId, code);
 
-      const data = await response.json();
+      setSuccess(true);
+      login(data.access_token);
 
-      if (response.ok) {
-        setSuccess(true);
-        login(data.access_token);
-
-        // Navigate after a short delay for user feedback
-        setTimeout(() => {
-          navigate("/", { replace: true });
-        }, 1500);
-      } else {
-        setError(data.error || "Invalid verification code");
-      }
-    } catch (err) {
-      setError("Network error. Please try again.");
+      // Navigate after a short delay for user feedback
+      setTimeout(() => {
+        navigate("/", { replace: true });
+      }, 1500);
+    } catch (err: any) {
+      const errorMessage =
+        err?.response?.data?.detail ||
+        err?.response?.data?.error ||
+        err?.message ||
+        "Invalid verification code";
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
