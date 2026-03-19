@@ -46,24 +46,21 @@ def create_app() -> FastAPI:
     )
 
     # ── CORS ──
+    # Fix: Never use wildcard origins with credentials (browsers reject this)
+    # Always use specific origins when allow_credentials=True
     if settings.app_env == "production":
         allowed_origins = [
-            f"https://app.{settings.cors_domain}",
-            f"https://api.{settings.cors_domain}",
-            "https://cos-aa.vercel.app",  # Production frontend on Vercel
+            "https://cos-aa.vercel.app",  # Production frontend
         ]
-        # Also allow all Vercel preview deployments during development
-        allow_origin_regex = r"https://.*\.vercel\.app"
-    elif settings.app_env == "staging":
-        allowed_origins = [
-            f"https://app.staging.{settings.cors_domain}",
-            f"https://api.staging.{settings.cors_domain}",
-            "https://cos-aa.vercel.app",
-        ]
-        allow_origin_regex = r"https://.*\.vercel\.app"
+        allow_origin_regex = r"https://.*\.vercel\.app"  # Preview deployments
     else:
-        allowed_origins = ["*"]
-        allow_origin_regex = None
+        # Development/staging: explicit origins (not wildcard)
+        allowed_origins = [
+            "http://localhost:5173",    # Vite dev server
+            "http://localhost:3000",    # Alternative dev port
+            "https://cos-aa.vercel.app", # Also allow production in dev
+        ]
+        allow_origin_regex = r"https://.*\.vercel\.app"
 
     # ── Custom Middleware ──
     # Order: last added = outermost. CORS MUST be outermost so ALL
