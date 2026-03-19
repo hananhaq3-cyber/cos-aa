@@ -93,7 +93,7 @@ async def create_oauth_verification_session(
 
     # Store in Redis with 10-minute expiry
     redis_key = f"oauth_verification:{session.session_id}"
-    await redis_client.setex(
+    await redis_client.client.setex(
         redis_key,
         600,  # 10 minutes
         json.dumps(session.to_dict()),
@@ -105,7 +105,7 @@ async def create_oauth_verification_session(
 async def get_oauth_verification_session(session_id: str) -> Optional[OAuthVerificationSession]:
     """Get OAuth verification session by ID."""
     redis_key = f"oauth_verification:{session_id}"
-    data = await redis_client.get(redis_key)
+    data = await redis_client.client.get(redis_key)
 
     if not data:
         return None
@@ -116,12 +116,12 @@ async def get_oauth_verification_session(session_id: str) -> Optional[OAuthVerif
 
         # Check if expired
         if session.expires_at < datetime.now():
-            await redis_client.delete(redis_key)
+            await redis_client.client.delete(redis_key)
             return None
 
         return session
     except (json.JSONDecodeError, KeyError, ValueError):
-        await redis_client.delete(redis_key)
+        await redis_client.client.delete(redis_key)
         return None
 
 
@@ -137,7 +137,7 @@ async def verify_oauth_code(session_id: str, code: str) -> Optional[OAuthVerific
 
     # Code is valid, remove from Redis
     redis_key = f"oauth_verification:{session_id}"
-    await redis_client.delete(redis_key)
+    await redis_client.client.delete(redis_key)
 
     return session
 
@@ -145,4 +145,4 @@ async def verify_oauth_code(session_id: str, code: str) -> Optional[OAuthVerific
 async def delete_oauth_verification_session(session_id: str) -> None:
     """Delete OAuth verification session."""
     redis_key = f"oauth_verification:{session_id}"
-    await redis_client.delete(redis_key)
+    await redis_client.client.delete(redis_key)

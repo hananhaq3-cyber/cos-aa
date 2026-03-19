@@ -666,8 +666,9 @@ async def verify_oauth_code_endpoint(
                 await session.flush()
             else:
                 # User already exists, just verify email
+                from uuid import UUID as UUIDType
                 result = await session.execute(
-                    select(User).where(User.id == session_data.user_id)
+                    select(User).where(User.id == UUIDType(session_data.user_id))
                 )
                 user = result.scalar_one()
                 user.email_verified = True
@@ -679,7 +680,7 @@ async def verify_oauth_code_endpoint(
         else:
             # Existing user, verify email and update OAuth info
             result = await session.execute(
-                select(User).where(User.id == session_data.user_id)
+                select(User).where(User.id == UUIDType(session_data.user_id))
             )
             user = result.scalar_one()
             user.email_verified = True
