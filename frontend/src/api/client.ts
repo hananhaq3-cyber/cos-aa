@@ -24,13 +24,17 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Handle 401 — redirect to login
+// Handle 401 — redirect to login (but not if already on login page)
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
       localStorage.removeItem("cos_aa_token");
-      window.location.href = "/login";
+      // Don't redirect if we're already on login/auth pages
+      const currentPath = window.location.pathname;
+      if (!currentPath.startsWith("/login") && !currentPath.startsWith("/verify-email")) {
+        window.location.href = "/login";
+      }
     }
     return Promise.reject(error);
   }
