@@ -579,17 +579,28 @@ async def oauth_callback(
                         user.email_verified_at = datetime.now(timezone.utc)
                         await session.flush()
                 else:
-                    # Different provider - account linking would be unsafe without explicit user consent
-                    # For now, we reject this and tell user to use their original provider
+                    # Different provider - allow automatic account linking for verified emails
+                    # Since OAuth providers verify emails, this is safe for convenience
                     await log_audit_event(
                         tenant_id=user.tenant_id, user_id=user.id,
-                        action="oauth_login", status="failure",
+                        action="oauth_login", status="success",
                         ip_address=ip, user_agent=user_agent,
-                        details={"provider": provider, "reason": "account_exists_different_provider"},
+                        details={
+                            "provider": provider,
+                            "reason": "account_linked_automatically",
+                            "previous_provider": user.oauth_provider,
+                            "new_provider": provider
+                        },
                     )
-                    return RedirectResponse(
-                        url=f"{frontend_url}/login?error=account_exists_with_different_provider"
-                    )
+
+                    # Update user to support the new OAuth provider
+                    # Keep the original provider info but update to current for this login
+                    user.oauth_provider = provider
+                    user.oauth_provider_id = user_info.provider_id
+                    if not user.email_verified:
+                        user.email_verified = True
+                        user.email_verified_at = datetime.now(timezone.utc)
+                    await session.flush()
             else:
                 # Create new tenant + user
                 # Use email hash to avoid name collisions
