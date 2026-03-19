@@ -586,7 +586,11 @@ async def oauth_callback(
         provider=provider,
         email=user_info.email,
         provider_id=user_info.provider_id,
-        user_info=user_info.__dict__,
+        user_info={
+            "email": user_info.email,
+            "provider": user_info.provider,
+            "provider_id": user_info.provider_id,
+        },
         user_id=user_id,
         tenant_id=tenant_id,
         is_new_user=is_new_user,
