@@ -1,12 +1,15 @@
 """
 Authentication endpoints: login, register, OAuth, and user info.
+Updated: March 19, 2026 - Enforcing mandatory email verification for all users.
 """
 import secrets
+import structlog
 from uuid import UUID
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import RedirectResponse
+from starlette.responses import JSONResponse
 from sqlalchemy import select
 
 from src.api.auth.jwt_handler import TokenClaims, create_access_token, decode_access_token
@@ -24,9 +27,10 @@ from src.api.auth.verification import (
     check_resend_cooldown,
     set_resend_cooldown,
 )
-from src.api.auth.email import send_verification_email
+from src.api.auth.oauth_verification import create_oauth_verification_session, verify_oauth_code
+from src.api.auth.email import send_verification_email, send_oauth_verification_email
 from src.api.schemas.auth_schemas import (
-    AuthResponse, LoginRequest, RegisterRequest, SessionResponse,
+    AuthResponse, LoginRequest, RegisterRequest, SessionResponse, OAuthVerifyRequest,
 )
 from src.core.config import settings
 from src.db.models.tenant import Tenant
@@ -36,6 +40,7 @@ from src.db.postgres import get_session
 from src.db.redis_client import redis_client
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
+logger = structlog.get_logger(__name__)
 
 
 def _get_client_info(request: Request) -> tuple[str | None, str | None]:
@@ -543,6 +548,7 @@ async def oauth_callback(
         )
         return RedirectResponse(url=f"{frontend_url}/login?error=oauth_failed")
 
+    # Instead of immediately logging in, create OAuth verification session
     async with get_session(tenant_id=None) as session:
         # Look for existing user by OAuth provider ID
         result = await session.execute(
@@ -551,61 +557,90 @@ async def oauth_callback(
                 User.oauth_provider_id == user_info.provider_id,
             )
         )
-        user = result.scalar_one_or_none()
+        existing_user = result.scalar_one_or_none()
 
-        if user and not user.email_verified:
-            user.email_verified = True
-            user.email_verified_at = datetime.now(timezone.utc)
-            await session.flush()
+        user_id = None
+        tenant_id = None
+        is_new_user = True
 
-        if not user:
-            # Look for existing user by email
+        if existing_user:
+            # Existing user with same OAuth provider
+            user_id = str(existing_user.id)
+            tenant_id = str(existing_user.tenant_id)
+            is_new_user = False
+        else:
+            # Check if user exists with same email from different provider
             result = await session.execute(
                 select(User).where(User.email == user_info.email)
             )
-            user = result.scalar_one_or_none()
+            email_user = result.scalar_one_or_none()
 
-            if user:
-                # Account exists with same email but different provider
-                # For security, don't auto-link. Instead, require explicit confirmation
-                # For now, we'll prevent linking and return an error
-                # (In production, you'd want a separate flow for account linking)
+            if email_user:
+                # Same email, different provider - will link accounts after verification
+                user_id = str(email_user.id)
+                tenant_id = str(email_user.tenant_id)
+                is_new_user = False
 
-                # Check if it's the same provider (shouldn't happen, caught earlier)
-                if user.oauth_provider == provider:
-                    # Same provider, just verify email
-                    if not user.email_verified:
-                        user.email_verified = True
-                        user.email_verified_at = datetime.now(timezone.utc)
-                        await session.flush()
-                else:
-                    # Different provider - allow automatic account linking for verified emails
-                    # Since OAuth providers verify emails, this is safe for convenience
-                    await log_audit_event(
-                        tenant_id=user.tenant_id, user_id=user.id,
-                        action="oauth_login", status="success",
-                        ip_address=ip, user_agent=user_agent,
-                        details={
-                            "provider": provider,
-                            "reason": "account_linked_automatically",
-                            "previous_provider": user.oauth_provider,
-                            "new_provider": provider
-                        },
-                    )
+    # Create temporary OAuth verification session
+    verification_session = await create_oauth_verification_session(
+        provider=provider,
+        email=user_info.email,
+        provider_id=user_info.provider_id,
+        user_info=user_info.__dict__,
+        user_id=user_id,
+        tenant_id=tenant_id,
+        is_new_user=is_new_user,
+    )
 
-                    # Update user to support the new OAuth provider
-                    # Keep the original provider info but update to current for this login
-                    user.oauth_provider = provider
-                    user.oauth_provider_id = user_info.provider_id
-                    if not user.email_verified:
-                        user.email_verified = True
-                        user.email_verified_at = datetime.now(timezone.utc)
-                    await session.flush()
-            else:
-                # Create new tenant + user
-                # Use email hash to avoid name collisions
+    # Send verification code to email
+    try:
+        await send_oauth_verification_email(
+            user_info.email, verification_session.code, provider
+        )
+    except Exception as e:
+        logger.error("oauth_verification_code_send_failed", error=str(e), email=user_info.email)
+        await log_audit_event(
+            tenant_id=None, user_id=None,
+            action="oauth_login", status="failure",
+            ip_address=ip, user_agent=user_agent,
+            details={"provider": provider, "reason": "email_send_failed"},
+        )
+        return RedirectResponse(url=f"{frontend_url}/login?error=email_failed")
+
+    # Redirect to OAuth verification page instead of immediate login
+    response = RedirectResponse(
+        url=f"{frontend_url}/oauth-verify?session={verification_session.session_id}&provider={provider}",
+        status_code=302
+    )
+    return response
+
+
+# ── OAuth Email Verification ──
+
+
+@router.post("/oauth-verify", response_model=AuthResponse)
+async def verify_oauth_code_endpoint(
+    body: OAuthVerifyRequest,
+    request: Request,
+):
+    """Complete OAuth login by verifying email code."""
+    ip, user_agent = _get_client_info(request)
+    frontend_url = settings.frontend_url or "https://cos-aa.vercel.app"
+
+    # Verify the code and get session data
+    session_data = await verify_oauth_code(body.session_id, body.code)
+    if not session_data:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid or expired verification code"
+        )
+
+    async with get_session(tenant_id=None) as session:
+        if session_data.is_new_user:
+            if not session_data.user_id:
+                # Create new tenant + user for OAuth signup
                 import hashlib
-                email_hash = hashlib.sha256(user_info.email.encode()).hexdigest()[:8]
+                email_hash = hashlib.sha256(session_data.email.encode()).hexdigest()[:8]
                 tenant = Tenant(
                     name=f"tenant-{email_hash}",
                     quotas={
@@ -620,19 +655,43 @@ async def oauth_callback(
 
                 user = User(
                     tenant_id=tenant.id,
-                    email=user_info.email,
+                    email=session_data.email,
                     role="admin",
-                    oauth_provider=provider,
-                    oauth_provider_id=user_info.provider_id,
-                    email_verified=True,
+                    oauth_provider=session_data.provider,
+                    oauth_provider_id=session_data.provider_id,
+                    email_verified=True,  # Verified via OAuth email code
                     email_verified_at=datetime.now(timezone.utc),
                 )
                 session.add(user)
                 await session.flush()
+            else:
+                # User already exists, just verify email
+                result = await session.execute(
+                    select(User).where(User.id == session_data.user_id)
+                )
+                user = result.scalar_one()
+                user.email_verified = True
+                user.email_verified_at = datetime.now(timezone.utc)
+                # Update OAuth provider info
+                user.oauth_provider = session_data.provider
+                user.oauth_provider_id = session_data.provider_id
+                await session.flush()
+        else:
+            # Existing user, verify email and update OAuth info
+            result = await session.execute(
+                select(User).where(User.id == session_data.user_id)
+            )
+            user = result.scalar_one()
+            user.email_verified = True
+            user.email_verified_at = datetime.now(timezone.utc)
+            user.oauth_provider = session_data.provider
+            user.oauth_provider_id = session_data.provider_id
+            await session.flush()
 
+    # Create access token
     token = create_access_token(
         user_id=user.id, tenant_id=user.tenant_id, role=user.role, scopes=[],
-        email=user.email, email_verified=user.email_verified,
+        email=user.email, email_verified=True,
     )
 
     # Track session in database
@@ -652,16 +711,13 @@ async def oauth_callback(
     await log_audit_event(
         tenant_id=user.tenant_id,
         user_id=user.id,
-        action="oauth_login",
+        action="oauth_login_verified",
         status="success",
         ip_address=ip,
         user_agent=user_agent,
-        details={"provider": provider},
+        details={"provider": session_data.provider, "email_verified": True},
     )
 
-    # Redirect to frontend with token as URL parameter
-    # LoginPage extracts token from ?token= and stores in localStorage
-    response = RedirectResponse(
-        url=f"{frontend_url}/login?token={token}", status_code=302
+    return _build_auth_response(
+        user.id, user.tenant_id, user.email, user.role, email_verified=True
     )
-    return response

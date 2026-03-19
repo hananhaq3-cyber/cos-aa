@@ -59,6 +59,11 @@ class Settings(BaseSettings):
     # --- Email (Resend) ---
     resend_api_key: str = ""
     email_from: str = "COS-AA <onboarding@resend.dev>"
+
+    # --- Email (Gmail SMTP - Free Alternative) ---
+    smtp_user: str = ""  # Gmail address (e.g., myapp@gmail.com)
+    smtp_password: str = ""  # Gmail App Password (not regular password)
+
     frontend_url: str = "https://cos-aa.vercel.app"
 
     # --- Vault ---

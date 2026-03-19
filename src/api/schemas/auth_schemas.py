@@ -39,3 +39,8 @@ class SessionResponse(BaseModel):
     last_activity_at: datetime | None = None
     is_current: bool = False
     is_revoked: bool = False
+
+
+class OAuthVerifyRequest(BaseModel):
+    session_id: str
+    code: str

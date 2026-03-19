@@ -16,6 +16,7 @@ import SecurityAuditPage from "./pages/SecurityAuditPage";
 import LoadTestPage from "./pages/LoadTestPage";
 import LoginPage from "./pages/LoginPage";
 import VerifyEmailPage from "./pages/VerifyEmailPage";
+import OAuthVerifyPage from "./pages/OAuthVerifyPage";
 import { useAuthStore } from "./store/authStore";
 
 export default function App() {
@@ -29,6 +30,7 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/verify-email" element={<VerifyEmailPage />} />
+      <Route path="/oauth-verify" element={<OAuthVerifyPage />} />
       <Route element={<ProtectedRoute />}>
         <Route path="/" element={<Layout />}>
           <Route index element={<DashboardPage />} />

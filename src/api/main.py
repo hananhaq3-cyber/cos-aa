@@ -115,6 +115,45 @@ def create_app() -> FastAPI:
         overall = all(checks.values())
         return {"healthy": overall, "checks": checks}
 
+    @app.post("/cleanup-accounts", tags=["admin"])
+    async def cleanup_all_accounts():
+        """DELETE ALL USER ACCOUNTS - Use with extreme caution!"""
+        from sqlalchemy import text as sa_text
+
+        # List of tables to clear in dependency order
+        delete_statements = [
+            "DELETE FROM user_sessions",          # Sessions first
+            "DELETE FROM audit_events",          # Audit logs
+            "DELETE FROM sessions",              # OODA sessions
+            "DELETE FROM cot_audit_log",        # Chain of thought logs
+            "DELETE FROM users",                 # Users
+            "DELETE FROM tenants",               # Tenants last
+        ]
+
+        try:
+            async with engine.begin() as conn:
+                for stmt in delete_statements:
+                    try:
+                        result = await conn.execute(sa_text(stmt))
+                        print(f"✅ {stmt} - {result.rowcount} rows deleted")
+                    except Exception as e:
+                        print(f"⚠️  {stmt} - Error: {e}")
+
+                # Reset sequences (PostgreSQL)
+                reset_statements = [
+                    "ALTER SEQUENCE IF EXISTS users_id_seq RESTART WITH 1",
+                    "ALTER SEQUENCE IF EXISTS tenants_id_seq RESTART WITH 1",
+                ]
+                for stmt in reset_statements:
+                    try:
+                        await conn.execute(sa_text(stmt))
+                    except Exception as e:
+                        print(f"⚠️  {stmt} - Error: {e}")
+
+            return {"status": "success", "message": "All accounts deleted successfully"}
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
     return app
 
 
