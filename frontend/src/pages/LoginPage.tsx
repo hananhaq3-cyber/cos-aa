@@ -1,4 +1,4 @@
-import { useEffect, lazy, Suspense, useState } from "react";
+import { useEffect, lazy, Suspense, useState, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import AuthCard from "../components/login/AuthCard";
 import { useAuthStore } from "../store/authStore";
@@ -13,14 +13,21 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const [checkingAuth, setCheckingAuth] = useState(true);
+  const hasCheckedAuth = useRef(false);
 
   // Handle OAuth error redirects
   const oauthError = params.get("error");
 
   useEffect(() => {
-    // Check for token in URL (backward compatibility with old OAuth flow)
+    // Prevent multiple runs of auth validation
+    if (hasCheckedAuth.current) {
+      return;
+    }
+
+    // Check for token in URL (OAuth callback with token)
     const tokenParam = params.get("token");
     if (tokenParam) {
+      hasCheckedAuth.current = true;
       login(tokenParam);
       navigate("/", { replace: true });
       return;
@@ -28,25 +35,24 @@ export default function LoginPage() {
 
     // If already authenticated via localStorage, redirect to dashboard
     if (isAuthenticated) {
+      hasCheckedAuth.current = true;
       navigate("/", { replace: true });
       return;
     }
 
-    // After OAuth callback, the HTTP-only cookie is automatically set by the browser
-    // Check if cookie-based auth is valid by calling /auth/me
-    // (Axios will include the cookie via withCredentials: true)
+    // Only call getMe() once to check for HTTP-only cookie auth
     const validateCookieAuth = async () => {
+      if (hasCheckedAuth.current) return;
+      hasCheckedAuth.current = true;
+
       try {
         const user = await getMe();
-        // If successful, login with the returned token (or rely on axios sending cookie)
-        // Actually, after OAuth, the token is in a cookie, not in localStorage
-        // So we trust axios to send the cookie with all requests
-        // We just update the auth state
         if (user && user.access_token) {
-          // Store token in localStorage for consistency with manual login
           login(user.access_token);
+          navigate("/", { replace: true });
+        } else {
+          setCheckingAuth(false);
         }
-        navigate("/", { replace: true });
       } catch {
         // Not authenticated via cookie, show login form
         setCheckingAuth(false);
